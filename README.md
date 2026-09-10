@@ -8,7 +8,7 @@
 [![macOS](https://img.shields.io/badge/macOS-15%2B-000000?logo=apple&logoColor=white&style=for-the-badge)](https://www.apple.com/macos/)
 [![Local AI](https://img.shields.io/badge/AI-100%25_LOCAL-7C3AED?style=for-the-badge)](#-local-semantic-search)
 [![Tests](https://img.shields.io/badge/TESTS-4_PASSING-22C55E?style=for-the-badge)](#-proof-not-promises)
-[![Stars](https://img.shields.io/github/stars/replypaldevs/clipboard-library-macos?style=for-the-badge&logo=github&color=gold)](https://github.com/replypaldevs/clipboard-library-macos/stargazers)
+[![Stars](https://img.shields.io/github/stars/agents-dev/clipboard-library-macos?style=for-the-badge&logo=github&color=gold)](https://github.com/agents-dev/clipboard-library-macos/stargazers)
 
 > **Turn the macOS clipboard into a private, searchable library.**  
 > **Keep rich formats. Read text inside images. Add markup. Keep every operation on your Mac.**
@@ -57,7 +57,7 @@ Require macOS 15 or later, Apple Silicon, Xcode, and the Swift 6 toolchain.
 
 ```bash
 # 🚀 Build and test the source
-git clone https://github.com/replypaldevs/clipboard-library-macos.git
+git clone https://github.com/agents-dev/clipboard-library-macos.git
 cd clipboard-library-macos
 swift test
 
