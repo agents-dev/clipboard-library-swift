@@ -1,0 +1,77 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "storagePrecision" : "Float16",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 512)",
+        "shortDescription" : "the clip embedding of the input text",
+        "shape" : "[1, 512]",
+        "name" : "final_emb_1",
+        "type" : "MultiArray"
+      }
+    ],
+    "modelParameters" : [
+
+    ],
+    "specificationVersion" : 6,
+    "mlProgramOperationTypeHistogram" : {
+      "Cast" : 1,
+      "Linear" : 17,
+      "SliceByIndex" : 12,
+      "LayerNorm" : 9,
+      "Transpose" : 16,
+      "Gelu" : 6,
+      "Matmul" : 8,
+      "Stack" : 1,
+      "Softmax" : 4,
+      "Mul" : 4,
+      "Squeeze" : 2,
+      "Reshape" : 8,
+      "Add" : 11,
+      "ExpandDims" : 2,
+      "ReduceArgmax" : 1,
+      "Gather" : 1,
+      "Conv" : 8,
+      "GatherNd" : 1
+    },
+    "computePrecision" : "Mixed (Float16, Float32, Int32)",
+    "isUpdatable" : "0",
+    "stateSchema" : [
+
+    ],
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.github.apple.coremltools.source" : "torch==1.13.0",
+      "com.github.apple.coremltools.version" : "7.1"
+    },
+    "inputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Int32",
+        "formattedType" : "MultiArray (Int32 1 × 77)",
+        "shortDescription" : "Input text already tokenized",
+        "shape" : "[1, 77]",
+        "name" : "text",
+        "type" : "MultiArray"
+      }
+    ],
+    "generatedClassName" : "mobileclip_s0_text",
+    "method" : "predict"
+  }
+]

@@ -1,0 +1,78 @@
+[
+  {
+    "metadataOutputVersion" : "3.0",
+    "storagePrecision" : "Float16",
+    "outputSchema" : [
+      {
+        "hasShapeFlexibility" : "0",
+        "isOptional" : "0",
+        "dataType" : "Float32",
+        "formattedType" : "MultiArray (Float32 1 × 512)",
+        "shortDescription" : "the clip embedding of the input image",
+        "shape" : "[1, 512]",
+        "name" : "final_emb_1",
+        "type" : "MultiArray"
+      }
+    ],
+    "modelParameters" : [
+
+    ],
+    "specificationVersion" : 6,
+    "mlProgramOperationTypeHistogram" : {
+      "Squeeze" : 6,
+      "Softmax" : 2,
+      "Linear" : 5,
+      "Gelu" : 30,
+      "Transpose" : 10,
+      "Matmul" : 4,
+      "AvgPool" : 1,
+      "Relu" : 3,
+      "Mul" : 8,
+      "Cast" : 2,
+      "Sigmoid" : 3,
+      "Add" : 22,
+      "BatchNorm" : 2,
+      "ReduceMean" : 3,
+      "Reshape" : 8,
+      "Conv" : 95,
+      "Split" : 2
+    },
+    "computePrecision" : "Mixed (Float16, Float32, Int32)",
+    "isUpdatable" : "0",
+    "stateSchema" : [
+
+    ],
+    "availability" : {
+      "macOS" : "12.0",
+      "tvOS" : "15.0",
+      "visionOS" : "1.0",
+      "watchOS" : "8.0",
+      "iOS" : "15.0",
+      "macCatalyst" : "15.0"
+    },
+    "modelType" : {
+      "name" : "MLModelType_mlProgram"
+    },
+    "userDefinedMetadata" : {
+      "com.github.apple.coremltools.source_dialect" : "TorchScript",
+      "com.github.apple.coremltools.source" : "torch==1.13.0",
+      "com.github.apple.coremltools.version" : "7.1"
+    },
+    "inputSchema" : [
+      {
+        "height" : "256",
+        "colorspace" : "RGB",
+        "isOptional" : "0",
+        "width" : "256",
+        "isColor" : "1",
+        "formattedType" : "Image (Color 256 × 256)",
+        "hasSizeFlexibility" : "0",
+        "type" : "Image",
+        "shortDescription" : "Input image to be processed",
+        "name" : "image"
+      }
+    ],
+    "generatedClassName" : "mobileclip_s0_image",
+    "method" : "predict"
+  }
+]
