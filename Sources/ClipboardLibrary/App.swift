@@ -17,6 +17,7 @@ import ApplicationServices
     var target: NSRunningApplication?
     var onPaste: (() -> Void)?
     var setShortcut: ((UInt32) -> Void)?
+    var quitApplication: (() -> Void)?
     @Published var shortcutKey = UserDefaults.standard.string(forKey: "shortcutKey") ?? "V"
     let indexingQueue = OperationQueue()
     init() throws {
@@ -161,7 +162,7 @@ struct LibraryView: View {
                 Button("Delete all history", role: .destructive) { let alert = NSAlert(); alert.messageText = "Delete all clipboard history?"; alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Delete All"); if alert.runModal() == .alertSecondButtonReturn { do { try model.repository.deleteAll(); model.refresh() } catch { model.message = error.localizedDescription } } }
                 Button("Done") { settings = false }
                 Button("Rebuild search index") { model.indexingQueue.cancelAllOperations(); do { try model.repository.rebuild(); model.resumeIndexing() } catch { model.message = error.localizedDescription } }
-                Button("Quit Clipboard Library") { NSApp.terminate(nil) }
+                Button("Quit Clipboard Library") { model.quitApplication?() }
             }.padding(24).frame(width: 440)
         }.sheet(item: $editing) { item in if let image = model.image(item) { MarkupView(image: image, itemID: item.id, repository: model.repository) } }
     }
@@ -186,6 +187,7 @@ struct LibraryView: View {
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var model: AppModel?
     var status: NSStatusItem?
+    let statusMenu = NSMenu()
     var panel: NSPanel?
     var hotkey: EventHotKeyRef?
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -193,15 +195,40 @@ struct LibraryView: View {
         do { model = try AppModel() } catch { let alert = NSAlert(); alert.messageText = "Cannot open clipboard history"; alert.informativeText = error.localizedDescription; alert.runModal(); NSApp.terminate(nil); return }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         status?.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Library")
-        status?.button?.target = self; status?.button?.action = #selector(show)
+        status?.button?.target = self; status?.button?.action = #selector(statusItemClicked)
+        status?.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        statusMenu.addItem(withTitle: "Open Clipboard Library", action: #selector(show), keyEquivalent: "")
+        statusMenu.addItem(withTitle: "Pause Capture", action: #selector(toggleCapture), keyEquivalent: "")
+        statusMenu.addItem(.separator())
+        statusMenu.addItem(withTitle: "Quit Clipboard Library", action: #selector(quit), keyEquivalent: "q")
+        for item in statusMenu.items { item.target = self }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
             guard let context else { return noErr }; let delegate = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
             Task { @MainActor in delegate.show() }; return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), nil)
         model?.setShortcut = { [weak self] code in self?.registerShortcut(code) }
+        model?.quitApplication = { [weak self] in self?.quit() }
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
+    }
+    @objc func statusItemClicked() {
+        if NSApp.currentEvent?.type == .rightMouseUp, let button = status?.button {
+            statusMenu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        } else {
+            show()
+        }
+    }
+    @objc func toggleCapture() {
+        guard let model else { return }
+        model.paused.toggle()
+        statusMenu.items.first(where: { $0.action == #selector(toggleCapture) })?.title = model.paused ? "Resume Capture" : "Pause Capture"
+    }
+    @objc func quit() {
+        model?.timer?.invalidate()
+        model?.indexingQueue.cancelAllOperations()
+        panel?.orderOut(nil)
+        NSApplication.shared.terminate(self)
     }
     func registerShortcut(_ code: UInt32) {
         if let hotkey { UnregisterEventHotKey(hotkey) }
