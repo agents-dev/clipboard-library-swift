@@ -218,8 +218,7 @@ struct LibraryView: View {
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
         if ProcessInfo.processInfo.arguments.contains("--open-picker") {
-            NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.show() }
+            DispatchQueue.main.async { [weak self] in self?.presentPicker(activate: false) }
         }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -261,6 +260,9 @@ struct LibraryView: View {
         }
     }
     @objc func show() {
+        presentPicker(activate: true)
+    }
+    private func presentPicker(activate: Bool) {
         guard let model else { return }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier { model.target = NSWorkspace.shared.frontmostApplication }
         if panel == nil {
@@ -270,6 +272,12 @@ struct LibraryView: View {
             panel.contentView = NSHostingView(rootView: LibraryView(model: model)); self.panel = panel
             model.onPaste = { [weak panel] in panel?.orderOut(nil) }
         }
-        panel?.center(); panel?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        panel?.center()
+        if activate {
+            panel?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            panel?.orderFrontRegardless()
+        }
     }
 }
