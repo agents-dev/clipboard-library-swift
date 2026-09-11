@@ -117,6 +117,20 @@ Use the right panel as a persistent outline. Press **+** to add a root note. Pre
 
 Store the outline in the same local SQLite database. Keep notes independent from clipboard deletion and search-index rebuilds.
 
+## Shortcut Mapper
+
+Open Settings → Shortcut Mapper. Add a named mapping. Record the trigger or select a key and modifiers manually. Add key chords, single keys, Unicode text, and waits. Record action keys or edit each row with the controls. Use the arrows to reorder actions.
+
+Map Command-1 to a Control-Shift-M chord followed by the single key 1. Release the trigger modifiers to run the sequence. Allow the default 20 ms gap or add waits from 0 to 10 seconds.
+
+Select all applications or specify an application bundle ID. Choose a running application from the menu. Use an application-specific mapping to override a global mapping with the same trigger. Choose a different trigger for duplicate scopes and keep the clipboard picker shortcut reserved.
+
+Enable Accessibility access when requested. Click **Test in 3 seconds**, then focus another application. Keep that application in front until execution finishes. Use **Cancel Test** to cancel a test. Run one sequence at a time.
+
+Use text actions for layout-independent Unicode text. Interpret key labels as US physical key positions. Expect enabled Carbon triggers to reserve their chord globally, even for application-specific mappings. Disable a mapping to release its trigger when no other enabled mapping uses it.
+
+Keep mappings local in application preferences. Preserve invalid saved data for diagnosis. Do not use mappings as a password store.
+
 ## 🏗️ Project map
 
 ```text

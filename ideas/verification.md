@@ -1,6 +1,13 @@
 # Complete release verification
 
 - Verify global shortcuts and paste restoration with Accessibility enabled and disabled.
+- Open Settings → Shortcut Mapper. Add, duplicate, edit, reorder, disable, and delete mappings. Restart and verify persistence.
+- Record a trigger and action keys. Verify manual key and modifier controls. Verify Escape records as a key and recording does not open the picker.
+- Map Command-1 to Control-Shift-M followed by 1. Release Command and verify both actions in the destination application.
+- Verify Unicode text, explicit waits, the three-second test countdown, cancellation, and focus-loss cancellation.
+- Verify global fallback and application-specific precedence. Verify duplicate scope and picker conflicts, failed registrations, and retry after releasing another application's shortcut.
+- Verify sequences that output their own trigger or the picker shortcut without recursion. Verify physical modifiers do not leak into output.
+- Verify application-only triggers reserve their chord globally while enabled; disable mappings to return that chord to other applications.
 - Verify Quit from Settings, the menu-bar context menu, and Command-Q.
 - Type rapidly in Notes with image history visible. Verify smooth input and retain the last edit after quitting and reopening.
 - Verify Spaces, full-screen windows, multiple displays, and focus restoration manually.

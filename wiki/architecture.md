@@ -13,6 +13,10 @@
 - Delete a note and all descendants with one recursive SQLite query.
 - Promote direct children in place when Backspace deletes an empty note.
 - Run as a regular Dock and menu-bar application and hide the picker when the application loses focus.
+- Store versioned shortcut mappings in UserDefaults. Preserve invalid data under `shortcutMappings.invalidBackup` before accepting replacement data.
+- Register distinct enabled mapper triggers through Carbon. Resolve exact application bundle IDs before global mappings. Reserve the clipboard picker trigger.
+- Send balanced keyboard events through the shortcut executor. Wait for physical modifiers to release, serialize execution, and cancel remaining actions when the destination loses focus.
+- Suspend app hotkey registrations while recording or emitting mapped output. Restore registrations after output delivery to prevent recursive mappings.
 - Generate `Assets/AppIcon.icns` from the PNG master with `scripts/generate-icon.sh`.
 - Use `scripts/fetch-models.sh` to reproduce model assets from the pinned upstream revision.
 - Retain upstream license files with distributed assets.

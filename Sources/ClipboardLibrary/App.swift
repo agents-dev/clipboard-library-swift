@@ -19,6 +19,7 @@ import ApplicationServices
     var onPaste: (() -> Void)?
     var setShortcut: ((UInt32) -> Void)?
     var quitApplication: (() -> Void)?
+    let shortcuts = ShortcutController()
     @Published var shortcutKey = UserDefaults.standard.string(forKey: "shortcutKey") ?? "V"
     let indexingQueue = OperationQueue()
     let noteSaveQueue = DispatchQueue(label: "ClipboardLibrary.note-saves", qos: .userInitiated)
@@ -195,20 +196,25 @@ struct LibraryView: View {
             return .handled
         }
         .sheet(isPresented: $settings) {
+            VStack {
+            TabView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Settings").font(.title2)
                 Text("Exclude application bundle IDs, one per line")
                 Picker("Shortcut: Command-Shift", selection: $model.shortcutKey) { ForEach(["V", "B", "C", "X"], id: \.self) { Text($0) } }.onChange(of: model.shortcutKey) { _, value in
                     let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
-                    model.setShortcut?(codes[value] ?? 9); UserDefaults.standard.set(value, forKey: "shortcutKey")
+                    model.setShortcut?(codes[value] ?? 9); UserDefaults.standard.set(model.shortcutKey, forKey: "shortcutKey")
                 }
                 TextEditor(text: $model.exclusions).frame(height: 100)
                 Text("History has no expiration. Payloads are encrypted. Search text and metadata are stored in the local SQLite database.").font(.caption)
                 Button("Delete all history", role: .destructive) { let alert = NSAlert(); alert.messageText = "Delete all clipboard history?"; alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Delete All"); if alert.runModal() == .alertSecondButtonReturn { do { try model.repository.deleteAll(); model.refresh() } catch { model.message = error.localizedDescription } } }
-                Button("Done") { settings = false }
                 Button("Rebuild search index") { model.indexingQueue.cancelAllOperations(); do { try model.repository.rebuild(); model.resumeIndexing() } catch { model.message = error.localizedDescription } }
                 Button("Quit Clipboard Library") { model.quitApplication?() }
-            }.padding(24).frame(width: 440)
+            }.padding(24).tabItem { Text("General") }
+            ShortcutMapperView(controller: model.shortcuts).padding(24).tabItem { Text("Shortcut Mapper") }
+            }
+            Button("Done") { settings = false }.padding(.bottom, 16)
+            }.frame(width: 780, height: 540)
         }.sheet(item: $editing) { item in if let image = model.image(item) { MarkupView(image: image, itemID: item.id, repository: model.repository) } }
     }
     var visible: [ClipboardItem] { model.items.filter { item in switch filter { case "Pinned": return item.pinned; case "Images": return item.preview == "Image"; case "Text": return item.preview != "Image"; default: return true } } }
@@ -251,14 +257,27 @@ struct LibraryView: View {
         statusMenu.addItem(withTitle: "Quit Clipboard Library", action: #selector(quit), keyEquivalent: "q")
         for item in statusMenu.items { item.target = self }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
             guard let context else { return noErr }; let delegate = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
-            Task { @MainActor in delegate.show() }; return noErr
+            var hotkeyID = EventHotKeyID()
+            guard let event, GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+                MemoryLayout<EventHotKeyID>.size, nil, &hotkeyID) == noErr else { return OSStatus(eventNotHandledErr) }
+            let signature = hotkeyID.signature, id = hotkeyID.id
+            Task { @MainActor in
+                if signature == ShortcutRegistry.signature { delegate.model?.shortcuts.fire(id) }
+                else if signature == 0x434C4950 { delegate.show() }
+            }; return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), nil)
         model?.setShortcut = { [weak self] code in self?.registerShortcut(code) }
         model?.quitApplication = { [weak self] in self?.quit() }
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
+        model?.shortcuts.onEditingChanged = { [weak self] editing in
+            guard let self else { return }
+            if editing {
+                if let hotkey { UnregisterEventHotKey(hotkey); self.hotkey = nil }
+            } else { registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9) }
+        }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         show()
@@ -283,12 +302,23 @@ struct LibraryView: View {
         NSApplication.shared.terminate(self)
     }
     func applicationWillTerminate(_ notification: Notification) {
+        model?.shortcuts.stop()
         model?.noteSaveQueue.sync {}
     }
     func registerShortcut(_ code: UInt32) {
-        if let hotkey { UnregisterEventHotKey(hotkey) }
+        let reserved = ShortcutTrigger(keyCode: UInt16(code), modifiers: [.command, .shift])
+        if let model, model.shortcuts.mappings.contains(where: { $0.trigger == reserved }) {
+            model.message = "This shortcut is already used by Shortcut Mapper. Edit that mapping first."
+            let labels: [UInt16: String] = [9: "V", 11: "B", 8: "C", 7: "X"]
+            model.shortcutKey = labels[model.shortcuts.reservedTrigger.keyCode] ?? "V"
+            UserDefaults.standard.set(model.shortcutKey, forKey: "shortcutKey")
+            return
+        }
+        if let hotkey { UnregisterEventHotKey(hotkey); self.hotkey = nil }
         let status = RegisterEventHotKey(code, UInt32(cmdKey | shiftKey), EventHotKeyID(signature: 0x434C4950, id: 1), GetApplicationEventTarget(), 0, &hotkey)
         if status != noErr { model?.message = "Shortcut is unavailable. Choose another shortcut." }
+        model?.shortcuts.reservedTrigger = reserved
+        model?.shortcuts.refresh()
     }
     func windowDidResignKey(_ notification: Notification) {
         guard let picker = notification.object as? NSPanel, picker === panel else { return }
