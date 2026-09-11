@@ -5,6 +5,20 @@ import GRDB
 @testable import ClipboardLibrary
 
 final class StorageTests: XCTestCase {
+    @MainActor func testReplacementFocusClearsThenMovesOnNextMainLoopCycle() async {
+        var focusChanges: [String?] = []
+        let focusedPrevious = expectation(description: "Focus moves to previous note")
+
+        scheduleReplacementNoteFocus("previous") { value in
+            focusChanges.append(value)
+            if value == "previous" { focusedPrevious.fulfill() }
+        }
+
+        XCTAssertEqual(focusChanges, [nil])
+        await fulfillment(of: [focusedPrevious], timeout: 1)
+        XCTAssertEqual(focusChanges, [nil, "previous"])
+    }
+
     func testBackspaceDeletesOnlyAnAlreadyEmptyNoteField() {
         var deleteCount = 0
         let coordinator = NoteTextFieldCoordinator(

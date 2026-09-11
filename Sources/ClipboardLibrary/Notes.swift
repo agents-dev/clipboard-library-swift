@@ -13,6 +13,11 @@ func replacementNoteID(removing id: String, from rows: [VisibleNote]) -> String?
     return nil
 }
 
+@MainActor func scheduleReplacementNoteFocus(_ id: String?, setFocus: @escaping (String?) -> Void) {
+    setFocus(nil)
+    DispatchQueue.main.async { setFocus(id) }
+}
+
 struct NotesPanel: View {
     @ObservedObject var model: AppModel
     @State private var selection: String?
@@ -105,7 +110,7 @@ struct NotesPanel: View {
             try model.repository.deleteNotePromotingChildren(note.id)
             model.refreshNotes()
             selection = nextID
-            focused = nextID
+            scheduleReplacementNoteFocus(nextID) { focused = $0 }
         } catch { model.message = error.localizedDescription }
     }
 }
