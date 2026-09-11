@@ -43,9 +43,10 @@ final class StorageTests: XCTestCase {
             let item = try db.makeStatement(sql: "INSERT INTO items(id,created,lastSeen,source,preview,hash) VALUES(?,0,0,'benchmark',?,'test')")
             let fts = try db.makeStatement(sql: "INSERT INTO search(id,text) VALUES(?,?)")
             let vec = try db.makeStatement(sql: "INSERT INTO vectors(id,embedding) VALUES(?,?)")
+            let payload = try db.makeStatement(sql: "INSERT INTO payloads(itemID,sealed) VALUES(?,?)")
             for i in 0..<100000 {
                 let id = String(i), text = "receipt number \(i)"
-                try item.execute(arguments: [id,text]); try fts.execute(arguments: [id,text]); try vec.execute(arguments: [id,vector])
+                try item.execute(arguments: [id,text]); try fts.execute(arguments: [id,text]); try vec.execute(arguments: [id,vector]); try payload.execute(arguments: [id,Data()])
             }
         }
         let start = Date()
@@ -80,6 +81,20 @@ final class StorageTests: XCTestCase {
         try repo.delete(id)
         XCTAssertTrue(try repo.items().isEmpty)
         XCTAssertNil(try repo.db.read { try Data.fetchOne($0, sql: "SELECT sealed FROM payloads WHERE itemID=?", arguments: [id]) })
+    }
+    func testLegacyMetadataDoesNotSuppressDatabaseCapture() throws {
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
+        let representations = [PasteboardRepresentation(itemIndex: 0, uti: "public.text", data: Data("same".utf8))]
+        let encoded = try JSONEncoder().encode(representations)
+        let hash = SHA256.hash(data: encoded).map { String(format: "%02x", $0) }.joined()
+        try repo.db.write { db in
+            try db.execute(sql: "INSERT INTO items(id,created,lastSeen,source,preview,hash) VALUES('legacy',0,1,'test','same',?)", arguments: [hash])
+            try db.execute(sql: "INSERT INTO search(id,text) VALUES('legacy','same')")
+        }
+        let id = try repo.capture(representations, source: "test", preview: "same")
+        XCTAssertNotEqual(id, "legacy")
+        XCTAssertEqual(try repo.representations(id), representations)
+        XCTAssertEqual(try repo.items().map(\.id), [id])
     }
     func testTamperDetection() throws {
         let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))

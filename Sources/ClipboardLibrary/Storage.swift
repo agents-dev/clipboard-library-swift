@@ -78,7 +78,7 @@ final class ClipboardRepository: @unchecked Sendable {
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         let data = try encoder.encode(representations)
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        let previous = try db.read { try ClipboardItem.fetchOne($0, sql: "SELECT * FROM items ORDER BY lastSeen DESC LIMIT 1") }
+        let previous = try db.read { try ClipboardItem.fetchOne($0, sql: "SELECT items.* FROM items JOIN payloads ON payloads.itemID=items.id ORDER BY lastSeen DESC LIMIT 1") }
         if let previous, previous.hash == hash {
             try db.write { try $0.execute(sql: "UPDATE items SET lastSeen=?, useCount=useCount+1 WHERE id=?", arguments: [Date().timeIntervalSince1970, previous.id]) }; return previous.id
         }
@@ -102,14 +102,14 @@ final class ClipboardRepository: @unchecked Sendable {
     func items(query: String = "") throws -> [ClipboardItem] {
         let queryVector = query.isEmpty ? nil : try? MobileCLIP.shared.text(query)
         return try db.read { db in
-            if query.isEmpty { return try ClipboardItem.fetchAll(db, sql: "SELECT * FROM items ORDER BY pinned DESC,lastSeen DESC LIMIT 300") }
+            if query.isEmpty { return try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM items JOIN payloads ON payloads.itemID=items.id ORDER BY pinned DESC,lastSeen DESC LIMIT 300") }
             let terms = query.split(whereSeparator: \.isWhitespace).map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"*" }.joined(separator: " AND ")
             guard !terms.isEmpty else { return [] }
-            var results = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM search JOIN items ON items.id=search.id WHERE search MATCH ? ORDER BY pinned DESC,rank,lastSeen DESC LIMIT 300", arguments: [terms])
+            var results = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM search JOIN items ON items.id=search.id JOIN payloads ON payloads.itemID=items.id WHERE search MATCH ? ORDER BY pinned DESC,rank,lastSeen DESC LIMIT 300", arguments: [terms])
             if let vector = queryVector {
-                let matches = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM vectors JOIN items ON items.id=vectors.id WHERE embedding MATCH ? AND k=40 ORDER BY distance", arguments: [vector])
+                let matches = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM vectors JOIN items ON items.id=vectors.id JOIN payloads ON payloads.itemID=items.id WHERE embedding MATCH ? AND k=40 ORDER BY distance", arguments: [vector])
                 let seen = Set(results.map(\.id)); results.append(contentsOf: matches.filter { !seen.contains($0.id) })
-                let images = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM imageVectors JOIN items ON items.id=imageVectors.id WHERE embedding MATCH ? AND k=40 ORDER BY distance", arguments: [vector])
+                let images = try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM imageVectors JOIN items ON items.id=imageVectors.id JOIN payloads ON payloads.itemID=items.id WHERE embedding MATCH ? AND k=40 ORDER BY distance", arguments: [vector])
                 let existing = Set(results.map(\.id)); results.append(contentsOf: images.filter { !existing.contains($0.id) })
             }
             return results
@@ -133,8 +133,8 @@ final class ClipboardRepository: @unchecked Sendable {
         }
     } }
     func pin(_ item: ClipboardItem) throws { try db.write { try $0.execute(sql: "UPDATE items SET pinned=? WHERE id=?", arguments: [!item.pinned, item.id]) } }
-    func pending() throws -> [String] { try db.read { try String.fetchAll($0, sql: "SELECT id FROM items WHERE state='Indexing' ORDER BY created") } }
-    func rebuild() throws { try db.write { try $0.execute(sql: "UPDATE items SET state='Indexing'") } }
+    func pending() throws -> [String] { try db.read { try String.fetchAll($0, sql: "SELECT items.id FROM items JOIN payloads ON payloads.itemID=items.id WHERE state='Indexing' ORDER BY created") } }
+    func rebuild() throws { try db.write { try $0.execute(sql: "UPDATE items SET state='Indexing' WHERE id IN (SELECT itemID FROM payloads)") } }
     func setTags(_ id: String, tags: String) throws { try db.write { try $0.execute(sql: "UPDATE items SET tags=?,state='Indexing' WHERE id=?", arguments: [tags,id]) } }
     func delete(_ id: String) throws { try db.write { try $0.execute(sql: "DELETE FROM payloads WHERE itemID=?; DELETE FROM imageVectors WHERE id=?; DELETE FROM vectors WHERE id=?; DELETE FROM search WHERE id=?; DELETE FROM items WHERE id=?", arguments: [id,id,id,id,id]) } }
     func deleteAll() throws { let ids = try db.read { try String.fetchAll($0, sql: "SELECT id FROM items") }; for id in ids { try delete(id) } }
