@@ -1,6 +1,5 @@
 import Foundation
 import CryptoKit
-import Security
 import GRDB
 import CSQLiteVec
 
@@ -30,36 +29,28 @@ struct OutlineNote: Identifiable, FetchableRecord, TableRecord, Decodable, Equat
     var text: String
     var expanded: Bool
 }
-protocol PayloadStorage: Sendable { func save(_ data: Data, id: String) throws; func read(_ id: String) throws -> Data; func remove(_ id: String) throws }
-final class EncryptedStorage: PayloadStorage, @unchecked Sendable {
-    let directory: URL
-    let key: SymmetricKey
-    init(directory: URL, key: SymmetricKey? = nil) throws {
-        self.directory = directory
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        if let key { self.key = key; return }
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "local.ClipboardLibrary", kSecAttrAccount as String: "payload-key"]
-        var result: CFTypeRef?
-        var read = query; read[kSecReturnData as String] = true
-        let status = SecItemCopyMatching(read as CFDictionary, &result)
-        if status == errSecSuccess, let data = result as? Data { self.key = SymmetricKey(data: data) }
-        else if status == errSecItemNotFound {
-            let newKey = SymmetricKey(size: .bits256)
-            var insert = query; insert[kSecValueData as String] = newKey.withUnsafeBytes { Data($0) }; insert[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            let saved = SecItemAdd(insert as CFDictionary, nil)
-            guard saved == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(saved)) }
-            self.key = newKey
-        } else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
+enum LocalKeyFile {
+    static func loadOrCreate(at url: URL) throws -> SymmetricKey {
+        let manager = FileManager.default
+        try manager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        if manager.fileExists(atPath: url.path) {
+            let data = try Data(contentsOf: url)
+            guard data.count == 32 else { throw CocoaError(.fileReadCorruptFile) }
+            try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            return SymmetricKey(data: data)
+        }
+        let key = SymmetricKey(size: .bits256)
+        let data = key.withUnsafeBytes { Data($0) }
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        return key
     }
-    func save(_ data: Data, id: String) throws { try AES.GCM.seal(data, using: key).combined!.write(to: directory.appendingPathComponent(id), options: .atomic) }
-    func read(_ id: String) throws -> Data { try AES.GCM.open(AES.GCM.SealedBox(combined: Data(contentsOf: directory.appendingPathComponent(id))), using: key) }
-    func remove(_ id: String) throws { let url = directory.appendingPathComponent(id); if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) } }
 }
 final class ClipboardRepository: @unchecked Sendable {
     let db: DatabaseQueue
-    let payloads: PayloadStorage
-    init(path: String, payloads: PayloadStorage) throws {
-        self.payloads = payloads
+    let key: SymmetricKey
+    init(path: String, key: SymmetricKey) throws {
+        self.key = key
         var configuration = Configuration()
         configuration.prepareDatabase { database in
             guard sqlite3_vec_init(database.sqliteConnection, nil, nil) == 0 else { throw NSError(domain: "SQLiteVec", code: 1) }
@@ -78,6 +69,9 @@ final class ClipboardRepository: @unchecked Sendable {
         migrator.registerMigration("v4-outline-notes") { db in
             try db.execute(sql: "CREATE TABLE notes(id TEXT PRIMARY KEY, parentID TEXT REFERENCES notes(id) ON DELETE CASCADE, position INTEGER NOT NULL, text TEXT NOT NULL DEFAULT '', expanded BOOLEAN NOT NULL DEFAULT 1); CREATE INDEX notes_parent_position ON notes(parentID, position)")
         }
+        migrator.registerMigration("v5-database-payloads") { db in
+            try db.execute(sql: "CREATE TABLE payloads(itemID TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE, sealed BLOB NOT NULL)")
+        }
         try migrator.migrate(db)
     }
     @discardableResult func capture(_ representations: [PasteboardRepresentation], source: String, preview: String) throws -> String {
@@ -88,14 +82,23 @@ final class ClipboardRepository: @unchecked Sendable {
         if let previous, previous.hash == hash {
             try db.write { try $0.execute(sql: "UPDATE items SET lastSeen=?, useCount=useCount+1 WHERE id=?", arguments: [Date().timeIntervalSince1970, previous.id]) }; return previous.id
         }
-        let id = UUID().uuidString; try payloads.save(data, id: id)
-        do { try db.write { db in
+        let id = UUID().uuidString
+        let sealed = try AES.GCM.seal(data, using: key).combined!
+        try db.write { db in
             let now = Date().timeIntervalSince1970
             try db.execute(sql: "INSERT INTO items(id,created,lastSeen,source,preview,hash) VALUES(?,?,?,?,?,?)", arguments: [id, now, now, source, preview, hash])
             try db.execute(sql: "INSERT INTO search(id,text) VALUES(?,?)", arguments: [id, preview + " " + source + " " + representations.map(\.uti).joined(separator: " ")])
-        } } catch { try? payloads.remove(id); throw error }; return id
+            try db.execute(sql: "INSERT INTO payloads(itemID,sealed) VALUES(?,?)", arguments: [id, sealed])
+        }
+        return id
     }
-    func representations(_ id: String) throws -> [PasteboardRepresentation] { try JSONDecoder().decode([PasteboardRepresentation].self, from: payloads.read(id)) }
+    func representations(_ id: String) throws -> [PasteboardRepresentation] {
+        guard let sealed = try db.read({ try Data.fetchOne($0, sql: "SELECT sealed FROM payloads WHERE itemID=?", arguments: [id]) }) else {
+            throw NSError(domain: "ClipboardLibrary", code: 1, userInfo: [NSLocalizedDescriptionKey: "This item uses the old Keychain-backed storage format."])
+        }
+        let data = try AES.GCM.open(AES.GCM.SealedBox(combined: sealed), using: key)
+        return try JSONDecoder().decode([PasteboardRepresentation].self, from: data)
+    }
     func items(query: String = "") throws -> [ClipboardItem] {
         let queryVector = query.isEmpty ? nil : try? MobileCLIP.shared.text(query)
         return try db.read { db in
@@ -133,7 +136,7 @@ final class ClipboardRepository: @unchecked Sendable {
     func pending() throws -> [String] { try db.read { try String.fetchAll($0, sql: "SELECT id FROM items WHERE state='Indexing' ORDER BY created") } }
     func rebuild() throws { try db.write { try $0.execute(sql: "UPDATE items SET state='Indexing'") } }
     func setTags(_ id: String, tags: String) throws { try db.write { try $0.execute(sql: "UPDATE items SET tags=?,state='Indexing' WHERE id=?", arguments: [tags,id]) } }
-    func delete(_ id: String) throws { try db.write { try $0.execute(sql: "DELETE FROM imageVectors WHERE id=?; DELETE FROM vectors WHERE id=?; DELETE FROM search WHERE id=?; DELETE FROM items WHERE id=?", arguments: [id,id,id,id]) }; try payloads.remove(id) }
+    func delete(_ id: String) throws { try db.write { try $0.execute(sql: "DELETE FROM payloads WHERE itemID=?; DELETE FROM imageVectors WHERE id=?; DELETE FROM vectors WHERE id=?; DELETE FROM search WHERE id=?; DELETE FROM items WHERE id=?", arguments: [id,id,id,id,id]) } }
     func deleteAll() throws { let ids = try db.read { try String.fetchAll($0, sql: "SELECT id FROM items") }; for id in ids { try delete(id) } }
     func notes() throws -> [OutlineNote] { try db.read { try OutlineNote.fetchAll($0, sql: "SELECT * FROM notes ORDER BY position,id") } }
     @discardableResult func addNote(parentID: String? = nil, after: OutlineNote? = nil, text: String = "") throws -> String {

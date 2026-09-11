@@ -23,8 +23,8 @@ import ApplicationServices
     let indexingQueue = OperationQueue()
     init() throws {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ClipboardLibrary")
-        let storage = try EncryptedStorage(directory: root.appendingPathComponent("Payloads"))
-        repository = try ClipboardRepository(path: root.appendingPathComponent("history.sqlite").path, payloads: storage)
+        let key = try LocalKeyFile.loadOrCreate(at: root.appendingPathComponent("history.key"))
+        repository = try ClipboardRepository(path: root.appendingPathComponent("history.sqlite").path, key: key)
         indexingQueue.maxConcurrentOperationCount = 1; indexingQueue.qualityOfService = .utility
         refresh()
         refreshNotes()

@@ -8,7 +8,7 @@ final class StorageTests: XCTestCase {
     func testOutlineNoteHierarchyAndRecursiveDelete() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let repo = try ClipboardRepository(path: ":memory:", payloads: EncryptedStorage(directory: root, key: SymmetricKey(size: .bits256)))
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
         let firstID = try repo.addNote(text: "First")
         let first = try XCTUnwrap(repo.notes().first { $0.id == firstID })
         let secondID = try repo.addNote(after: first, text: "Second")
@@ -37,7 +37,7 @@ final class StorageTests: XCTestCase {
     func testHundredThousandEntrySearch() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let repo = try ClipboardRepository(path: ":memory:", payloads: EncryptedStorage(directory: root, key: SymmetricKey(size: .bits256)))
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
         let vector = try MobileCLIP.shared.text("a receipt")
         try repo.db.write { db in
             let item = try db.makeStatement(sql: "INSERT INTO items(id,created,lastSeen,source,preview,hash) VALUES(?,0,0,'benchmark',?,'test')")
@@ -66,12 +66,12 @@ final class StorageTests: XCTestCase {
     func testRoundTripSearchDedupAndDelete() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let storage = try EncryptedStorage(directory: root, key: SymmetricKey(size: .bits256))
-        let repo = try ClipboardRepository(path: ":memory:", payloads: storage)
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
         let representations = [PasteboardRepresentation(itemIndex: 0, uti: "public.utf8-plain-text", data: Data("hello world".utf8)), .init(itemIndex: 0, uti: "custom.raw", data: Data([0,255,8])), .init(itemIndex: 1, uti: "empty", data: Data())]
         let id = try repo.capture(representations, source: "test", preview: "hello world")
         XCTAssertEqual(try repo.representations(id), representations)
-        XCTAssertNotEqual(try Data(contentsOf: root.appendingPathComponent(id)), try JSONEncoder().encode(representations))
+        let sealed = try XCTUnwrap(repo.db.read { try Data.fetchOne($0, sql: "SELECT sealed FROM payloads WHERE itemID=?", arguments: [id]) })
+        XCTAssertNotEqual(sealed, try JSONEncoder().encode(representations))
         XCTAssertEqual(try repo.capture(representations, source: "test", preview: "hello world"), id)
         XCTAssertEqual(try repo.items().first?.useCount, 2)
         XCTAssertEqual(try repo.items(query: "hel").first?.id, id)
@@ -79,15 +79,27 @@ final class StorageTests: XCTestCase {
         XCTAssertEqual(try repo.items(query: "receipt").first?.id, id)
         try repo.delete(id)
         XCTAssertTrue(try repo.items().isEmpty)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent(id).path))
+        XCTAssertNil(try repo.db.read { try Data.fetchOne($0, sql: "SELECT sealed FROM payloads WHERE itemID=?", arguments: [id]) })
     }
     func testTamperDetection() throws {
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
+        let id = try repo.capture([.init(itemIndex: 0, uti: "public.text", data: Data("private".utf8))], source: "test", preview: "private")
+        try repo.db.write { db in
+            var sealed = try XCTUnwrap(Data.fetchOne(db, sql: "SELECT sealed FROM payloads WHERE itemID=?", arguments: [id]))
+            sealed[15] ^= 1
+            try db.execute(sql: "UPDATE payloads SET sealed=? WHERE itemID=?", arguments: [sealed, id])
+        }
+        XCTAssertThrowsError(try repo.representations(id))
+    }
+    func testLocalKeyFilePersistsAndUsesOwnerOnlyPermissions() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let storage = try EncryptedStorage(directory: root, key: SymmetricKey(size: .bits256))
-        try storage.save(Data("private".utf8), id: "payload")
-        var bytes = try Data(contentsOf: root.appendingPathComponent("payload")); bytes[15] ^= 1
-        try bytes.write(to: root.appendingPathComponent("payload"))
-        XCTAssertThrowsError(try storage.read("payload"))
+        let url = root.appendingPathComponent("history.key")
+        let first = try LocalKeyFile.loadOrCreate(at: url).withUnsafeBytes { Data($0) }
+        let second = try LocalKeyFile.loadOrCreate(at: url).withUnsafeBytes { Data($0) }
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.count, 32)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
     }
 }

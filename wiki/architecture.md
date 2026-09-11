@@ -1,7 +1,7 @@
 # Maintain the architecture
 
-- Store pasteboard item boundaries and all materialized UTI representations in AES-GCM payload files.
-- Keep the payload key in Keychain.
+- Store pasteboard item boundaries and all materialized UTI representations as AES-GCM blobs in SQLite.
+- Keep the random payload key in an owner-readable local application-support file.
 - Treat SQLite metadata, previews, OCR text, and markup text as unencrypted local data.
 - Use GRDB migrations to version storage.
 - Use the statically linked sqlite-vec extension to query normalized 512-dimensional MobileCLIP vectors.
