@@ -27,3 +27,7 @@
 - Generate `Assets/AppIcon.icns` from the PNG master with `scripts/generate-icon.sh`.
 - Use `scripts/fetch-models.sh` to reproduce model assets from the pinned upstream revision.
 - Retain upstream license files with distributed assets.
+- Return lexical search results before semantic inference. Delay semantic enrichment by 250 ms and discard cancelled results.
+- Load downsampled clipboard thumbnails outside the main actor. Bound the image cache to 32 MB and preserve full payloads for paste and markup.
+- Limit list Markdown parsing to 1,000 characters. Preserve the complete stored preview and original payload.
+- Keep recent-history ordering indexed by lastSeen and by pinned/lastSeen.

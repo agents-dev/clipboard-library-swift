@@ -50,9 +50,22 @@ import ApplicationServices
         searchTask?.cancel()
         let query = query, repo = repository
         searchTask = Task {
-            let result = await Task.detached(priority: .userInitiated) { Result { try repo.items(query: query) } }.value
+            let result = await Task.detached(priority: .userInitiated) { Result { try repo.items(query: query, semantic: false) } }.value
             guard !Task.isCancelled else { return }
             switch result { case .success(let items): self.items = items; case .failure(let error): message = error.localizedDescription }
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            let semantic = Task.detached(priority: .utility) {
+                guard !Task.isCancelled else { return Result<[ClipboardItem], Error>.success([]) }
+                return Result { try repo.items(query: query) }
+            }
+            let enriched = await withTaskCancellationHandler {
+                await semantic.value
+            } onCancel: {
+                semantic.cancel()
+            }
+            guard !Task.isCancelled else { return }
+            if case .success(let items) = enriched { self.items = items }
         }
     }
     func capture() {
@@ -167,34 +180,15 @@ struct LibraryView: View {
             }.padding(.horizontal).padding(.vertical, 6)
             if model.grid {
                 ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) { ForEach(visible) { item in
-                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; markdownText(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
+                    VStack { ClipboardThumbnail(repository: model.repository, id: item.id, width: 140, height: 110); markdownText(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
                 } }.padding() }
             } else {
                 List(visible, selection: $selection) { item in
-                    let previewImage = model.image(item)
                     HStack(alignment: .top) {
-                        ZStack(alignment: .topTrailing) {
-                            if let image = previewImage {
-                                Image(nsImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 68, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                                    .overlay { RoundedRectangle(cornerRadius: 7).stroke(.separator) }
-                            } else {
-                                Image(systemName: "doc.text")
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 34, height: 42)
+                        ClipboardThumbnail(repository: model.repository, id: item.id, width: 68, height: 52)
+                            .overlay(alignment: .topTrailing) {
+                                if item.pinned { Image(systemName: "pin.fill").font(.caption2) }
                             }
-                            if item.pinned {
-                                Image(systemName: "pin.fill")
-                                    .font(.caption2)
-                                    .padding(4)
-                                    .background(.regularMaterial, in: Circle())
-                                    .offset(x: 5, y: -5)
-                            }
-                        }
-                        .accessibilityLabel(previewImage == nil ? "Clipboard text" : "Clipboard image preview")
                         VStack(alignment: .leading, spacing: 5) {
                             markdownText(item.preview).lineLimit(3)
                             Text("\(item.source) · \(item.state) · \(item.useCount) copies").font(.caption).foregroundStyle(.secondary)
@@ -248,7 +242,7 @@ struct LibraryView: View {
     }
     var visible: [ClipboardItem] { model.items.filter { item in switch filter { case "Pinned": return item.pinned; case "Images": return item.preview == "Image"; case "Text": return item.preview != "Image"; default: return true } } }
     func markdownText(_ source: String) -> Text {
-        Text((try? AttributedString(markdown: source)) ?? AttributedString(source))
+        Text((try? AttributedString(markdown: String(source.prefix(1000)))) ?? AttributedString(String(source.prefix(1000))))
     }
     func move(_ delta: Int) { guard !visible.isEmpty else { return }; let index = selection.flatMap { id in visible.firstIndex { $0.id == id } } ?? (delta > 0 ? -1 : visible.count); selection = visible[max(0,min(visible.count-1,index+delta))].id }
     @ViewBuilder func actions(_ item: ClipboardItem) -> some View {
@@ -258,7 +252,7 @@ struct LibraryView: View {
             let alert = NSAlert(); alert.messageText = "Tags"; let input = NSTextField(string: item.tags); input.frame = NSRect(x: 0, y: 0, width: 320, height: 24); alert.accessoryView = input; alert.addButton(withTitle: "Save"); alert.addButton(withTitle: "Cancel")
             if alert.runModal() == .alertFirstButtonReturn { do { try model.repository.setTags(item.id, tags: input.stringValue); model.enqueue(item.id); model.refresh() } catch { model.message = error.localizedDescription } }
         }
-        if model.image(item) != nil { Button("Markup image") { editing = item } }
+        if item.preview == "Image" { Button("Markup image") { editing = item } }
         Button("Delete", role: .destructive) { model.remove(item) }
     }
 }

@@ -76,6 +76,9 @@ final class ClipboardRepository: @unchecked Sendable {
         migrator.registerMigration("v6-note-files") { db in
             try db.execute(sql: "ALTER TABLE notes ADD COLUMN attachmentName TEXT; CREATE TABLE noteFiles(noteID TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE, sealed BLOB NOT NULL)")
         }
+        migrator.registerMigration("v7-history-order") { db in
+            try db.execute(sql: "CREATE INDEX items_recent ON items(lastSeen DESC); CREATE INDEX items_picker_order ON items(pinned DESC,lastSeen DESC)")
+        }
         try migrator.migrate(db)
     }
     @discardableResult func capture(_ representations: [PasteboardRepresentation], source: String, preview: String) throws -> String {
@@ -103,8 +106,9 @@ final class ClipboardRepository: @unchecked Sendable {
         let data = try AES.GCM.open(AES.GCM.SealedBox(combined: sealed), using: key)
         return try JSONDecoder().decode([PasteboardRepresentation].self, from: data)
     }
-    func items(query: String = "") throws -> [ClipboardItem] {
-        let queryVector = query.isEmpty ? nil : try? MobileCLIP.shared.text(query)
+    func items(query: String = "", semantic: Bool = true) throws -> [ClipboardItem] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let queryVector = query.isEmpty || !semantic ? nil : try? MobileCLIP.shared.text(query)
         return try db.read { db in
             if query.isEmpty { return try ClipboardItem.fetchAll(db, sql: "SELECT items.* FROM items JOIN payloads ON payloads.itemID=items.id ORDER BY pinned DESC,lastSeen DESC LIMIT 300") }
             let terms = query.split(whereSeparator: \.isWhitespace).map { "\"" + $0.replacingOccurrences(of: "\"", with: "\"\"") + "\"*" }.joined(separator: " AND ")

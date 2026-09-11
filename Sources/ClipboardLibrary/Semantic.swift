@@ -16,6 +16,7 @@ final class MobileCLIP: EmbeddingService {
     }
     func text(_ text: String) throws -> Data {
         lock.lock(); defer { lock.unlock() }
+        try Task.checkCancellation()
         if textModel == nil { textModel = try model("mobileclip_s0_text") }
         if tokenizer == nil { tokenizer = try CLIPTokens() }
         let tokens = try tokenizer!.encode(text)
