@@ -198,7 +198,7 @@ struct LibraryView: View {
     var hotkey: EventHotKeyRef?
     let screenshotMode = ProcessInfo.processInfo.arguments.contains("--open-picker")
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(screenshotMode ? .accessory : .regular)
         do { model = try AppModel() } catch { let alert = NSAlert(); alert.messageText = "Cannot open clipboard history"; alert.informativeText = error.localizedDescription; alert.runModal(); NSApp.terminate(nil); return }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         status?.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Library")
