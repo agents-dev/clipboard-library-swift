@@ -5,6 +5,24 @@ import GRDB
 @testable import ClipboardLibrary
 
 final class StorageTests: XCTestCase {
+    func testBackspaceDeletesOnlyAnAlreadyEmptyNoteField() {
+        var deleteCount = 0
+        let coordinator = NoteTextFieldCoordinator(
+            textChanged: { _ in },
+            deleteEmpty: { deleteCount += 1 },
+            submit: {}
+        )
+        let field = NSTextField(string: "")
+        let editor = NSTextView()
+
+        XCTAssertTrue(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.deleteBackward(_:))))
+        XCTAssertEqual(deleteCount, 1)
+
+        field.stringValue = "text"
+        XCTAssertFalse(coordinator.control(field, textView: editor, doCommandBy: #selector(NSResponder.deleteBackward(_:))))
+        XCTAssertEqual(deleteCount, 1)
+    }
+
     func testReplacementNoteFocusPrefersPreviousThenNext() {
         let first = OutlineNote(id: "first", parentID: nil, position: 0, text: "", expanded: true)
         let second = OutlineNote(id: "second", parentID: nil, position: 1, text: "", expanded: true)

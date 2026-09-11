@@ -71,9 +71,16 @@ struct NotesPanel: View {
             NoteTextField(
                 initialText: row.note.text,
                 save: { model.saveNoteText(row.note.id, text: $0) },
-                deleteIfEmpty: { removePromotingChildren(row.note) }
+                deleteIfEmpty: { removePromotingChildren(row.note) },
+                submit: { addAfter(row.note) },
+                focused: Binding(
+                    get: { focused == row.note.id },
+                    set: { isFocused in
+                        if isFocused { focused = row.note.id }
+                        else if focused == row.note.id { focused = nil }
+                    }
+                )
             )
-                .focused($focused, equals: row.note.id).onSubmit { addAfter(row.note) }
         }
         .padding(.leading, CGFloat(row.depth * 22) + 8).padding(.trailing, 8).padding(.vertical, 5)
         .overlay(alignment: .leading) { if row.depth > 0 { Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 1).padding(.leading, CGFloat(row.depth * 22)) } }
@@ -103,25 +110,93 @@ struct NotesPanel: View {
     }
 }
 
-private struct NoteTextField: View {
+struct NoteTextField: NSViewRepresentable {
     @State private var text: String
     let save: (String) -> Void
     let deleteIfEmpty: () -> Void
+    let submit: () -> Void
+    @Binding var focused: Bool
 
-    init(initialText: String, save: @escaping (String) -> Void, deleteIfEmpty: @escaping () -> Void) {
+    init(
+        initialText: String,
+        save: @escaping (String) -> Void,
+        deleteIfEmpty: @escaping () -> Void,
+        submit: @escaping () -> Void,
+        focused: Binding<Bool>
+    ) {
         _text = State(initialValue: initialText)
         self.save = save
         self.deleteIfEmpty = deleteIfEmpty
+        self.submit = submit
+        _focused = focused
     }
 
-    var body: some View {
-        TextField("Note", text: $text)
-            .textFieldStyle(.plain)
-            .onChange(of: text) { _, value in save(value) }
-            .onKeyPress(.delete) {
-                guard text.isEmpty else { return .ignored }
-                deleteIfEmpty()
-                return .handled
-            }
+    func makeCoordinator() -> NoteTextFieldCoordinator {
+        NoteTextFieldCoordinator(
+            textChanged: { value in text = value; save(value) },
+            deleteEmpty: deleteIfEmpty,
+            submit: submit,
+            focusChanged: { focused = $0 }
+        )
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
+        field.placeholderString = "Note"
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.textChanged = { value in text = value; save(value) }
+        context.coordinator.deleteEmpty = deleteIfEmpty
+        context.coordinator.submit = submit
+        context.coordinator.focusChanged = { focused = $0 }
+        if field.stringValue != text { field.stringValue = text }
+        if focused, field.currentEditor() == nil {
+            DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+        }
+    }
+}
+
+final class NoteTextFieldCoordinator: NSObject, NSTextFieldDelegate {
+    var textChanged: (String) -> Void
+    var deleteEmpty: () -> Void
+    var submit: () -> Void
+    var focusChanged: (Bool) -> Void
+
+    init(
+        textChanged: @escaping (String) -> Void,
+        deleteEmpty: @escaping () -> Void,
+        submit: @escaping () -> Void,
+        focusChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.textChanged = textChanged
+        self.deleteEmpty = deleteEmpty
+        self.submit = submit
+        self.focusChanged = focusChanged
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let field = notification.object as? NSTextField else { return }
+        textChanged(field.stringValue)
+    }
+
+    func controlTextDidBeginEditing(_ notification: Notification) { focusChanged(true) }
+    func controlTextDidEndEditing(_ notification: Notification) { focusChanged(false) }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.deleteBackward(_:)), control.stringValue.isEmpty {
+            deleteEmpty()
+            return true
+        }
+        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+            submit()
+            return true
+        }
+        return false
     }
 }
