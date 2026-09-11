@@ -196,9 +196,8 @@ struct LibraryView: View {
     let statusMenu = NSMenu()
     var panel: NSPanel?
     var hotkey: EventHotKeyRef?
-    let screenshotMode = ProcessInfo.processInfo.arguments.contains("--open-picker")
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(screenshotMode ? .accessory : .regular)
+        NSApp.setActivationPolicy(.regular)
         do { model = try AppModel() } catch { let alert = NSAlert(); alert.messageText = "Cannot open clipboard history"; alert.informativeText = error.localizedDescription; alert.runModal(); NSApp.terminate(nil); return }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         status?.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Library")
@@ -218,9 +217,6 @@ struct LibraryView: View {
         model?.quitApplication = { [weak self] in self?.quit() }
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
-        if screenshotMode {
-            DispatchQueue.main.async { [weak self] in self?.presentPicker(activate: false) }
-        }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         show()
@@ -250,7 +246,6 @@ struct LibraryView: View {
         if status != noErr { model?.message = "Shortcut is unavailable. Choose another shortcut." }
     }
     func windowDidResignKey(_ notification: Notification) {
-        if screenshotMode { return }
         guard let picker = notification.object as? NSPanel, picker === panel else { return }
         DispatchQueue.main.async { [weak picker] in
             guard let picker else { return }
@@ -261,25 +256,21 @@ struct LibraryView: View {
         }
     }
     @objc func show() {
-        presentPicker(activate: true)
+        presentPicker()
     }
-    private func presentPicker(activate: Bool) {
+    private func presentPicker() {
         guard let model else { return }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier { model.target = NSWorkspace.shared.frontmostApplication }
         if panel == nil {
             let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 620), styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.title = "Clipboard Library"; panel.level = .floating; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.hidesOnDeactivate = !screenshotMode
+            panel.hidesOnDeactivate = true
             panel.delegate = self
             panel.contentView = NSHostingView(rootView: LibraryView(model: model)); self.panel = panel
             model.onPaste = { [weak panel] in panel?.orderOut(nil) }
         }
         panel?.center()
-        if activate {
-            panel?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-        } else {
-            panel?.orderFrontRegardless()
-        }
+        panel?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
