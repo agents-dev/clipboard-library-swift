@@ -9,4 +9,5 @@
 - Do not leave project changes uncommitted.
 - Write a clear, focused commit message for each change.
 - Read [architecture](wiki/architecture.md) before changing service boundaries.
+- Read [local signing](wiki/local-signing.md) before changing build signing.
 - Read [follow-up checks](ideas/verification.md) before release.

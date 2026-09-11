@@ -1,0 +1,10 @@
+[req]
+distinguished_name = subject
+x509_extensions = signing
+prompt = no
+[subject]
+CN = Clipboard Library Local Signing
+[signing]
+basicConstraints = critical,CA:false
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
