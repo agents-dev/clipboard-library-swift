@@ -75,13 +75,15 @@ struct NotesPanel: View {
             Circle().fill(selection == row.note.id ? Color.accentColor : Color.secondary).frame(width: 7, height: 7)
             NoteTextField(
                 initialText: row.note.text,
+                selected: selection == row.note.id,
+                paste: { model.pasteNote($0) },
                 save: { model.saveNoteText(row.note.id, text: $0) },
                 deleteIfEmpty: { removePromotingChildren(row.note) },
                 submit: { addAfter(row.note) },
                 focused: Binding(
                     get: { focused == row.note.id },
                     set: { isFocused in
-                        if isFocused { focused = row.note.id }
+                        if isFocused { selection = row.note.id; focused = row.note.id }
                         else if focused == row.note.id { focused = nil }
                     }
                 )
@@ -89,7 +91,8 @@ struct NotesPanel: View {
         }
         .padding(.leading, CGFloat(row.depth * 22) + 8).padding(.trailing, 8).padding(.vertical, 5)
         .overlay(alignment: .leading) { if row.depth > 0 { Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 1).padding(.leading, CGFloat(row.depth * 22)) } }
-        .contentShape(Rectangle()).onTapGesture { selection = row.note.id; focused = row.note.id }
+        .contentShape(Rectangle())
+        .onTapGesture { selection = row.note.id; focused = row.note.id }
         .contextMenu {
             Button("Add child") { addChild(row.note) }
             Button("Indent") { tryChange { try model.repository.indentNote(row.note) } }
@@ -117,6 +120,8 @@ struct NotesPanel: View {
 
 struct NoteTextField: NSViewRepresentable {
     @State private var text: String
+    let selected: Bool
+    let paste: (String) -> Void
     let save: (String) -> Void
     let deleteIfEmpty: () -> Void
     let submit: () -> Void
@@ -124,12 +129,16 @@ struct NoteTextField: NSViewRepresentable {
 
     init(
         initialText: String,
+        selected: Bool = true,
+        paste: @escaping (String) -> Void = { _ in },
         save: @escaping (String) -> Void,
         deleteIfEmpty: @escaping () -> Void,
         submit: @escaping () -> Void,
         focused: Binding<Bool>
     ) {
         _text = State(initialValue: initialText)
+        self.selected = selected
+        self.paste = paste
         self.save = save
         self.deleteIfEmpty = deleteIfEmpty
         self.submit = submit
@@ -146,7 +155,7 @@ struct NoteTextField: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField(string: text)
+        let field = NoteNativeTextField(string: text)
         field.placeholderString = "Note"
         field.isBordered = false
         field.drawsBackground = false
@@ -160,9 +169,21 @@ struct NoteTextField: NSViewRepresentable {
         context.coordinator.deleteEmpty = deleteIfEmpty
         context.coordinator.submit = submit
         context.coordinator.focusChanged = { focused = $0 }
-        if field.stringValue != text { field.stringValue = text }
+        let displayed = selected ? text : text.components(separatedBy: .newlines).first ?? ""
+        if field.stringValue != displayed { field.stringValue = displayed }
+        field.maximumNumberOfLines = selected ? 0 : 1
+        field.lineBreakMode = selected ? .byWordWrapping : .byTruncatingTail
+        field.usesSingleLineMode = !selected
+        if let noteField = field as? NoteNativeTextField {
+            noteField.fullText = text
+            noteField.pasteNote = paste
+        }
+        field.invalidateIntrinsicContentSize()
         if focused, field.currentEditor() == nil {
-            DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+            DispatchQueue.main.async {
+                guard field.window?.isVisible == true else { return }
+                field.window?.makeFirstResponder(field)
+            }
         }
     }
 }
@@ -203,5 +224,39 @@ final class NoteTextFieldCoordinator: NSObject, NSTextFieldDelegate {
             return true
         }
         return false
+    }
+}
+
+final class NoteNativeTextField: NSTextField {
+    var fullText = ""
+    var pasteNote: ((String) -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        // Restore all lines before AppKit creates the editor for a collapsed row.
+        if currentEditor() == nil {
+            stringValue = fullText
+            maximumNumberOfLines = 0
+            usesSingleLineMode = false
+            lineBreakMode = .byWordWrapping
+            invalidateIntrinsicContentSize()
+        }
+        super.mouseDown(with: event)
+    }
+    private var clickMonitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor); self.clickMonitor = nil }
+        guard window != nil else { return }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, event.window === self.window, event.clickCount == 2,
+                  self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+            self.pasteNote?(self.currentEditor()?.string ?? self.fullText)
+            return nil
+        }
+    }
+
+    deinit {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
     }
 }

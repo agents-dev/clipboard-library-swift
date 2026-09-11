@@ -16,3 +16,6 @@
 - Add dedicated tests for every annotation tool and rendered pixel coordinates.
 - Verify model retrieval quality with a labeled image collection.
 - Treat polling as best-effort capture; do not claim to capture intermediate clipboard updates between polls.
+
+- Double-click a note and verify full-text paste into the previous application and picker dismissal. Repeat during editing.
+- Paste multiple lines into a note. Select another note and verify only the first line remains visible. Select the original note and verify all lines remain intact.

@@ -95,6 +95,24 @@ import ApplicationServices
         }
     }
     func image(_ item: ClipboardItem) -> NSImage? { guard let reps = try? repository.representations(item.id) else { return nil }; return reps.lazy.filter { ["public.png", "public.tiff", "public.jpeg"].contains($0.uti) }.compactMap { NSImage(data: $0.data) }.first }
+    func pasteNote(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        count = NSPasteboard.general.changeCount
+        finishPaste()
+    }
+
+    private func finishPaste() {
+        onPaste?()
+        let trusted = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        target?.activate()
+        if trusted { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true); down?.flags = .maskCommand
+            let up = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false); up?.flags = .maskCommand
+            down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
+        } } else { message = "Copied. Press Command-V to paste. Enable Accessibility for automatic paste." }
+    }
+
     func paste(_ item: ClipboardItem) {
         do {
             let reps = try repository.representations(item.id)
@@ -103,14 +121,7 @@ import ApplicationServices
                 let value = NSPasteboardItem(); for rep in grouped[index]! { value.setData(rep.data, forType: .init(rep.uti)) }; return value
             }
             NSPasteboard.general.clearContents(); NSPasteboard.general.writeObjects(objects); count = NSPasteboard.general.changeCount
-            onPaste?()
-            let trusted = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-            target?.activate()
-            if trusted { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true); down?.flags = .maskCommand
-                let up = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false); up?.flags = .maskCommand
-                down?.post(tap: .cghidEventTap); up?.post(tap: .cghidEventTap)
-            } } else { message = "Copied. Press Command-V to paste. Enable Accessibility for automatic paste." }
+            finishPaste()
         } catch { message = error.localizedDescription }
     }
     func remove(_ item: ClipboardItem) { do { try repository.delete(item.id); refresh() } catch { message = error.localizedDescription } }
