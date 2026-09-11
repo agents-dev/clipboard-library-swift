@@ -22,6 +22,14 @@ struct ClipboardItem: Identifiable, FetchableRecord, TableRecord, Decodable {
     var state: String
     var tags: String
 }
+struct OutlineNote: Identifiable, FetchableRecord, TableRecord, Decodable, Equatable {
+    static let databaseTableName = "notes"
+    var id: String
+    var parentID: String?
+    var position: Int
+    var text: String
+    var expanded: Bool
+}
 protocol PayloadStorage: Sendable { func save(_ data: Data, id: String) throws; func read(_ id: String) throws -> Data; func remove(_ id: String) throws }
 final class EncryptedStorage: PayloadStorage, @unchecked Sendable {
     let directory: URL
@@ -66,6 +74,9 @@ final class ClipboardRepository: @unchecked Sendable {
         }
         migrator.registerMigration("v3-mobileclip") { db in
             try db.execute(sql: "DELETE FROM vectors; UPDATE items SET state='Indexing'; UPDATE indexVersion SET version=2; CREATE VIRTUAL TABLE imageVectors USING vec0(id TEXT PRIMARY KEY, embedding float[512])")
+        }
+        migrator.registerMigration("v4-outline-notes") { db in
+            try db.execute(sql: "CREATE TABLE notes(id TEXT PRIMARY KEY, parentID TEXT REFERENCES notes(id) ON DELETE CASCADE, position INTEGER NOT NULL, text TEXT NOT NULL DEFAULT '', expanded BOOLEAN NOT NULL DEFAULT 1); CREATE INDEX notes_parent_position ON notes(parentID, position)")
         }
         try migrator.migrate(db)
     }
@@ -124,4 +135,32 @@ final class ClipboardRepository: @unchecked Sendable {
     func setTags(_ id: String, tags: String) throws { try db.write { try $0.execute(sql: "UPDATE items SET tags=?,state='Indexing' WHERE id=?", arguments: [tags,id]) } }
     func delete(_ id: String) throws { try db.write { try $0.execute(sql: "DELETE FROM imageVectors WHERE id=?; DELETE FROM vectors WHERE id=?; DELETE FROM search WHERE id=?; DELETE FROM items WHERE id=?", arguments: [id,id,id,id]) }; try payloads.remove(id) }
     func deleteAll() throws { let ids = try db.read { try String.fetchAll($0, sql: "SELECT id FROM items") }; for id in ids { try delete(id) } }
+    func notes() throws -> [OutlineNote] { try db.read { try OutlineNote.fetchAll($0, sql: "SELECT * FROM notes ORDER BY position,id") } }
+    @discardableResult func addNote(parentID: String? = nil, after: OutlineNote? = nil, text: String = "") throws -> String {
+        let id = UUID().uuidString
+        try db.write { db in
+            let parent = after?.parentID ?? parentID
+            let position: Int
+            if let after { position = after.position + 1 }
+            else { position = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM notes WHERE parentID IS ?", arguments: [parent])) ?? 0 }
+            try db.execute(sql: "UPDATE notes SET position=position+1 WHERE parentID IS ? AND position>=?", arguments: [parent,position])
+            try db.execute(sql: "INSERT INTO notes(id,parentID,position,text) VALUES(?,?,?,?)", arguments: [id,parent,position,text])
+        }
+        return id
+    }
+    func updateNote(_ id: String, text: String? = nil, expanded: Bool? = nil) throws { try db.write { db in
+        if let text { try db.execute(sql: "UPDATE notes SET text=? WHERE id=?", arguments: [text,id]) }
+        if let expanded { try db.execute(sql: "UPDATE notes SET expanded=? WHERE id=?", arguments: [expanded,id]) }
+    } }
+    func deleteNote(_ id: String) throws { try db.write { try $0.execute(sql: "WITH RECURSIVE descendants(id) AS (SELECT ? UNION ALL SELECT notes.id FROM notes JOIN descendants ON notes.parentID=descendants.id) DELETE FROM notes WHERE id IN descendants", arguments: [id]) } }
+    func indentNote(_ note: OutlineNote) throws { try db.write { db in
+        guard let previous = try OutlineNote.fetchOne(db, sql: "SELECT * FROM notes WHERE parentID IS ? AND position<? ORDER BY position DESC LIMIT 1", arguments: [note.parentID,note.position]) else { return }
+        let position = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM notes WHERE parentID=?", arguments: [previous.id])) ?? 0
+        try db.execute(sql: "UPDATE notes SET parentID=?,position=? WHERE id=?; UPDATE notes SET expanded=1 WHERE id=?", arguments: [previous.id,position,note.id,previous.id])
+    } }
+    func outdentNote(_ note: OutlineNote) throws { try db.write { db in
+        guard let parentID = note.parentID, let parent = try OutlineNote.fetchOne(db, key: parentID) else { return }
+        try db.execute(sql: "UPDATE notes SET position=position+1 WHERE parentID IS ? AND position>?", arguments: [parent.parentID,parent.position])
+        try db.execute(sql: "UPDATE notes SET parentID=?,position=? WHERE id=?", arguments: [parent.parentID,parent.position+1,note.id])
+    } }
 }

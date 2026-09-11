@@ -5,6 +5,35 @@ import GRDB
 @testable import ClipboardLibrary
 
 final class StorageTests: XCTestCase {
+    func testOutlineNoteHierarchyAndRecursiveDelete() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repo = try ClipboardRepository(path: ":memory:", payloads: EncryptedStorage(directory: root, key: SymmetricKey(size: .bits256)))
+        let firstID = try repo.addNote(text: "First")
+        let first = try XCTUnwrap(repo.notes().first { $0.id == firstID })
+        let secondID = try repo.addNote(after: first, text: "Second")
+        var second = try XCTUnwrap(repo.notes().first { $0.id == secondID })
+
+        try repo.indentNote(second)
+        second = try XCTUnwrap(repo.notes().first { $0.id == secondID })
+        XCTAssertEqual(second.parentID, firstID)
+
+        try repo.updateNote(secondID, text: "Nested", expanded: false)
+        second = try XCTUnwrap(repo.notes().first { $0.id == secondID })
+        XCTAssertEqual(second.text, "Nested")
+        XCTAssertFalse(second.expanded)
+
+        try repo.outdentNote(second)
+        second = try XCTUnwrap(repo.notes().first { $0.id == secondID })
+        XCTAssertNil(second.parentID)
+
+        let childID = try repo.addNote(parentID: firstID, text: "Child")
+        try repo.deleteNote(firstID)
+        let remainingIDs = Set(try repo.notes().map(\.id))
+        XCTAssertFalse(remainingIDs.contains(firstID))
+        XCTAssertFalse(remainingIDs.contains(childID))
+        XCTAssertTrue(remainingIDs.contains(secondID))
+    }
     func testHundredThousandEntrySearch() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -52,6 +52,7 @@ Use exact full-text search when you remember the words. Use semantic search when
 | 🔐 | **Encrypted payloads** | Protect raw clipboard data with AES-GCM and a Keychain key. |
 | 🚫 | **Application exclusions** | Stop capture from selected bundle identifiers. |
 | 📴 | **Offline operation** | Run storage, OCR, and model inference without a network service. |
+| 🌳 | **Outline notes** | Write nested Workflowy-style notes beside clipboard history. |
 
 ## ⚡ Quick start
 
@@ -109,6 +110,12 @@ Use these tools:
 - ⬛ Redact selected areas.
 - ↩️ Undo and redo edits.
 - 📤 Copy or export a rendered PNG.
+
+## 🌳 Outline notes
+
+Use the right panel as a persistent outline. Press **+** to add a root note. Press Return while editing to add the next note. Add children, indent, outdent, collapse, expand, and delete from the toolbar or context menu.
+
+Store the outline in the same local SQLite database. Keep notes independent from clipboard deletion and search-index rebuilds.
 
 ## 🏗️ Project map
 

@@ -10,6 +10,7 @@ import ApplicationServices
     @Published var paused = false
     @Published var message = ""
     @Published var grid = false
+    @Published var notes: [OutlineNote] = []
     @Published var exclusions: String = UserDefaults.standard.string(forKey: "excludedApps") ?? "" { didSet { UserDefaults.standard.set(exclusions, forKey: "excludedApps") } }
     let repository: ClipboardRepository
     var count = NSPasteboard.general.changeCount
@@ -26,9 +27,11 @@ import ApplicationServices
         repository = try ClipboardRepository(path: root.appendingPathComponent("history.sqlite").path, payloads: storage)
         indexingQueue.maxConcurrentOperationCount = 1; indexingQueue.qualityOfService = .utility
         refresh()
+        refreshNotes()
         resumeIndexing()
         timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in Task { @MainActor in self?.capture() } }
     }
+    func refreshNotes() { do { notes = try repository.notes() } catch { message = error.localizedDescription } }
     var searchTask: Task<Void, Never>?
     func refresh() {
         searchTask?.cancel()
@@ -113,6 +116,7 @@ struct LibraryView: View {
     @State var filter = "All"
     @FocusState var focused: Bool
     var body: some View {
+        HSplitView {
         VStack(spacing: 0) {
             HStack {
                 Image(systemName: "doc.on.clipboard").foregroundStyle(.blue)
@@ -145,7 +149,9 @@ struct LibraryView: View {
             }
             Divider()
             HStack { Text(model.paused ? "Capture paused" : "Local history • ⌘⇧V"); Spacer(); Text(model.message.isEmpty ? "Return to paste" : model.message).lineLimit(2) }.font(.caption).foregroundStyle(.secondary).padding(12)
-        }.frame(minWidth: 680, minHeight: 440).onAppear { focused = true }
+        }.frame(minWidth: 600, minHeight: 440)
+        NotesPanel(model: model).frame(minWidth: 280, idealWidth: 340, maxWidth: 520)
+        }.frame(minWidth: 920, minHeight: 440).onAppear { focused = true }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .onKeyPress(.upArrow) { move(-1); return .handled }
         .onKeyPress(.return) { if let item = visible.first(where: { $0.id == selection }) ?? visible.first { model.paste(item) }; return .handled }
@@ -241,8 +247,8 @@ struct LibraryView: View {
     }
     func windowDidResignKey(_ notification: Notification) {
         guard let picker = notification.object as? NSPanel, picker === panel else { return }
-        DispatchQueue.main.async { [weak self, weak picker] in
-            guard let self, let picker else { return }
+        DispatchQueue.main.async { [weak picker] in
+            guard let picker else { return }
             let keyWindowBelongsToPicker = NSApp.keyWindow?.sheetParent === picker
             if picker.attachedSheet == nil && !keyWindowBelongsToPicker {
                 picker.orderOut(nil)
@@ -253,7 +259,7 @@ struct LibraryView: View {
         guard let model else { return }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier { model.target = NSWorkspace.shared.frontmostApplication }
         if panel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 560), styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 620), styleMask: [.titled, .closable, .resizable, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.title = "Clipboard Library"; panel.level = .floating; panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate = self
             panel.contentView = NSHostingView(rootView: LibraryView(model: model)); self.panel = panel

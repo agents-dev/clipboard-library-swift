@@ -7,6 +7,7 @@
 5. Enable Accessibility when prompted to permit automatic paste. Use Command-V manually otherwise.
 6. Right-click an image and select **Markup image**. Save a version, copy PNG, or export PNG.
 7. Open Settings to pause capture, exclude applications, rebuild the index, delete history, or quit.
+8. Use the right Notes panel to write an outline. Add children, indent, outdent, collapse, expand, and delete notes.
 
 Keep the application on this Mac. Use bundled models without an internet connection. Expect unlimited retention until deletion. Treat SQLite previews and search text as unencrypted local content; rely on payload encryption only for the raw clipboard archive.
 
