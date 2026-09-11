@@ -1,6 +1,6 @@
 # Run Clipboard Library
 
-1. Open `Clipboard Library.app` on macOS 15 or later with Apple Silicon.
+1. Open `Clipboard Library.app` on macOS 15 or later with Apple Silicon. Find it in the Dock while it runs.
 2. Copy text or an image.
 3. Press Command-Shift-V or click the clipboard menu-bar icon.
 4. Search history, select an entry, and press Return.

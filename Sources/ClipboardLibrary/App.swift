@@ -191,7 +191,7 @@ struct LibraryView: View {
     var panel: NSPanel?
     var hotkey: EventHotKeyRef?
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
         do { model = try AppModel() } catch { let alert = NSAlert(); alert.messageText = "Cannot open clipboard history"; alert.informativeText = error.localizedDescription; alert.runModal(); NSApp.terminate(nil); return }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         status?.button?.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Clipboard Library")
@@ -211,6 +211,10 @@ struct LibraryView: View {
         model?.quitApplication = { [weak self] in self?.quit() }
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        show()
+        return true
     }
     @objc func statusItemClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp, let button = status?.button {

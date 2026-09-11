@@ -9,5 +9,7 @@
 - Bundle Apple MobileCLIP-S0 Core ML encoders and tokenizer resources.
 - Run OCR and inference on the serial indexing queue.
 - Preserve originals and store annotation documents as independent versions.
+- Run as a regular Dock application and keep the menu-bar control available.
+- Generate `Assets/AppIcon.icns` from the PNG master with `scripts/generate-icon.sh`.
 - Use `scripts/fetch-models.sh` to reproduce model assets from the pinned upstream revision.
 - Retain upstream license files with distributed assets.

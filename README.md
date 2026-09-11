@@ -2,6 +2,8 @@
 
 # 📋 Clipboard Library
 
+<img src="Assets/AppIcon-1024.png" width="160" alt="Clipboard Library icon" />
+
 ### ⚡ Search everything you copied. Find images by meaning. Paste in one keystroke. ⚡
 
 [![Swift](https://img.shields.io/badge/Swift-6.0-F05138?logo=swift&logoColor=white&style=for-the-badge)](https://www.swift.org/)
@@ -26,7 +28,7 @@
 
 ## 🧠 TL;DR
 
-Press **Command-Shift-V**. Search text, URLs, rich content, OCR results, and images. Select one result. Press Return. Clipboard Library restores the original pasteboard representations and pastes them into the application that you were using.
+Open Clipboard Library from the Dock or press **Command-Shift-V**. Search text, URLs, rich content, OCR results, and images. Select one result. Press Return. Clipboard Library restores the original pasteboard representations and pastes them into the application that you were using.
 
 Yes, it searches image text. Yes, it searches image meaning. Yes, it runs locally.
 
@@ -118,6 +120,7 @@ Use these tools:
 │   ├── Semantic.swift            # MobileCLIP inference and tokenizer
 │   ├── Markup.swift              # Editable image annotation versions
 │   └── Resources                 # Core ML models, tokenizer, model licenses
+├── 🎨 Assets                     # App icon master and compiled icon
 ├── 🧮 Sources/CSQLiteVec         # Statically linked sqlite-vec
 ├── 🧪 Tests                      # Storage, inference, tamper, scale checks
 ├── 🔧 scripts                    # Reproducible model and app builds
