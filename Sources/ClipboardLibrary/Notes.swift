@@ -21,6 +21,9 @@ func replacementNoteID(removing id: String, from rows: [VisibleNote]) -> String?
 struct NotesPanel: View {
     @ObservedObject var model: AppModel
     @State private var selection: String?
+    @State private var showGitHubImport = false
+    @State private var importingFiles = false
+    @State private var importError = ""
     @FocusState private var focused: String?
 
     var body: some View {
@@ -29,12 +32,17 @@ struct NotesPanel: View {
                 Label("Notes", systemImage: "list.bullet.indent")
                     .font(.headline)
                 Spacer()
-                Button { addRoot() } label: { Image(systemName: "plus") }.help("Add note")
+                Menu {
+                    Button("Add text note") { addRoot() }
+                    Button("Paste files") { pasteFiles() }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .menuStyle(.borderlessButton).fixedSize().help("Notes actions")
+                Button { showGitHubImport = true } label: { Image(systemName: "plus") }
+                    .help("Import GitHub skills").accessibilityIdentifier("notes-import-github")
             }.padding(14)
             Divider()
             if visible.isEmpty {
-                ContentUnavailableView("No notes", systemImage: "list.bullet", description: Text("Press + and start typing."))
-                    .onTapGesture { addRoot() }
+                ContentUnavailableView("No notes", systemImage: "list.bullet", description: Text("Press + to import GitHub skills, or copy files in Finder and paste them here."))
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
@@ -43,7 +51,11 @@ struct NotesPanel: View {
                 }
             }
             Divider()
+            if importingFiles { ProgressView("Importing files…").controlSize(.small).padding(8) }
+            if !importError.isEmpty { Text(importError).font(.caption).foregroundStyle(.red).padding(8) }
             HStack(spacing: 14) {
+                Button { pasteFiles() } label: { Image(systemName: "doc.on.clipboard") }
+                    .help("Paste files under the selected note (Command-V)").disabled(importingFiles)
                 Button { if let note = selected { tryChange { try model.repository.outdentNote(note) } } } label: { Image(systemName: "decrease.indent") }.help("Outdent")
                 Button { if let note = selected { tryChange { try model.repository.indentNote(note) } } } label: { Image(systemName: "increase.indent") }.help("Indent")
                 Button { if let note = selected { addChild(note) } } label: { Image(systemName: "arrow.turn.down.right") }.help("Add child")
@@ -51,6 +63,14 @@ struct NotesPanel: View {
                 Button(role: .destructive) { if let note = selected { remove(note) } } label: { Image(systemName: "trash") }.help("Delete note")
             }.buttonStyle(.borderless).padding(12)
         }.background(Color(nsColor: .controlBackgroundColor))
+            .background(NotesFilePasteCapture { importFiles($0) })
+            .sheet(isPresented: $showGitHubImport) {
+                GitHubNotesImportSheet(repository: model.repository) { id in
+                    model.refreshNotes()
+                    selection = id
+                    focused = nil
+                }
+            }
     }
 
     var selected: OutlineNote? { model.notes.first { $0.id == selection } }
@@ -72,14 +92,21 @@ struct NotesPanel: View {
                     Image(systemName: row.note.expanded ? "chevron.down" : "chevron.right").font(.caption)
                 }.buttonStyle(.plain).frame(width: 14, height: 17)
             } else { Color.clear.frame(width: 14, height: 17) }
-            Circle()
+            if row.note.attachmentName != nil {
+                Image(systemName: "doc").font(.caption).foregroundStyle(.secondary)
+                    .frame(width: 12, height: 17)
+            } else { Circle()
                 .fill(selection == row.note.id ? Color.accentColor : Color.secondary)
                 .frame(width: 7, height: 7)
-                .frame(height: 17)
+                .frame(height: 17) }
             NoteTextField(
                 initialText: row.note.text,
                 selected: selection == row.note.id,
-                paste: { model.pasteNote($0) },
+                emphasized: hasChildren(row.note),
+                paste: { text in
+                    if row.note.attachmentName != nil { model.pasteNoteFile(row.note.id) }
+                    else { model.pasteNote(text) }
+                },
                 save: { model.saveNoteText(row.note.id, text: $0) },
                 deleteIfEmpty: { removePromotingChildren(row.note) },
                 submit: { addAfter(row.note) },
@@ -97,11 +124,38 @@ struct NotesPanel: View {
         .contentShape(Rectangle())
         .onTapGesture { selection = row.note.id; focused = row.note.id }
         .contextMenu {
+            if row.note.attachmentName != nil {
+                Button("Paste file") { model.pasteNoteFile(row.note.id) }
+            }
+            Button("Paste files as children") { pasteFiles(parentID: row.note.id) }
             Button("Add child") { addChild(row.note) }
             Button("Indent") { tryChange { try model.repository.indentNote(row.note) } }
             Button("Outdent") { tryChange { try model.repository.outdentNote(row.note) } }
             Divider()
             Button("Delete", role: .destructive) { remove(row.note) }
+        }
+    }
+    func pasteFiles(parentID: String? = nil) {
+        let urls = NoteFile.urls(from: .general)
+        guard !urls.isEmpty else { importError = "Copy files in Finder, then paste them here."; return }
+        importFiles(urls, parentID: parentID)
+    }
+    func importFiles(_ urls: [URL], parentID: String? = nil) {
+        guard !importingFiles else { return }
+        importingFiles = true
+        importError = ""
+        let parent = parentID ?? selection
+        let repository = model.repository
+        Task { @MainActor in
+            defer { importingFiles = false }
+            do {
+                let id = try await Task.detached(priority: .userInitiated) {
+                    try repository.importNoteFiles(NoteFile.read(urls), parentID: parent)
+                }.value
+                model.refreshNotes()
+                selection = id
+                focused = nil
+            } catch { importError = error.localizedDescription }
         }
     }
     func tryChange(_ change: () throws -> Void) { do { try change(); model.refreshNotes() } catch { model.message = error.localizedDescription } }
@@ -124,6 +178,7 @@ struct NotesPanel: View {
 struct NoteTextField: NSViewRepresentable {
     @State private var text: String
     let selected: Bool
+    let emphasized: Bool
     let paste: (String) -> Void
     let save: (String) -> Void
     let deleteIfEmpty: () -> Void
@@ -133,6 +188,7 @@ struct NoteTextField: NSViewRepresentable {
     init(
         initialText: String,
         selected: Bool = true,
+        emphasized: Bool = false,
         paste: @escaping (String) -> Void = { _ in },
         save: @escaping (String) -> Void,
         deleteIfEmpty: @escaping () -> Void,
@@ -141,6 +197,7 @@ struct NoteTextField: NSViewRepresentable {
     ) {
         _text = State(initialValue: initialText)
         self.selected = selected
+        self.emphasized = emphasized
         self.paste = paste
         self.save = save
         self.deleteIfEmpty = deleteIfEmpty
@@ -177,6 +234,7 @@ struct NoteTextField: NSViewRepresentable {
         field.maximumNumberOfLines = selected ? 0 : 1
         field.lineBreakMode = selected ? .byWordWrapping : .byTruncatingTail
         field.usesSingleLineMode = !selected
+        field.font = .systemFont(ofSize: NSFont.systemFontSize, weight: emphasized ? .semibold : .regular)
         if let noteField = field as? NoteNativeTextField {
             noteField.didFocus = { context.coordinator.focusChanged(true) }
             noteField.fullText = text

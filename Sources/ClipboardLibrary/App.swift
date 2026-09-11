@@ -102,6 +102,17 @@ import ApplicationServices
         finishPaste()
     }
 
+    func pasteNoteFile(_ id: String) {
+        do {
+            guard let file = try repository.noteFile(id) else { throw NoteImportError.message("This note has no attached file.") }
+            let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("ClipboardLibrary/Exports", isDirectory: true)
+            try file.writeToPasteboard(.general, exportRoot: root)
+            count = NSPasteboard.general.changeCount
+            finishPaste()
+        } catch { message = error.localizedDescription }
+    }
+
     private func finishPaste() {
         onPaste?()
         let trusted = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)

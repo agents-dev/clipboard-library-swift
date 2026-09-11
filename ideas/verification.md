@@ -20,3 +20,8 @@
 - Double-click a note and verify full-text paste into the previous application and picker dismissal. Repeat during editing.
 - Paste multiple lines into a note. Select another note and verify only the first line remains visible. Select the original note and verify all lines remain intact.
 - Focus a different note without typing. Verify the blue dot moves immediately and the editor contains all lines. Repeat with keyboard focus.
+- Click Notes + and import https://github.com/openai/plugins/tree/main/plugins/build-macos-apps. Verify one expanded parent and 11 skill children. Verify Cancel, invalid URLs, empty folders, and GitHub errors.
+- Double-click build-run-debug and paste into a file-capable destination. Verify build-run-debug.md and its full original Markdown bytes. Verify manual Command-V when Accessibility is unavailable.
+- Copy files in Finder and press Command-V in a note or blank Notes space. Repeat after using Search. Verify child attachments, preserved plain-text paste, and no file interception in Search or the GitHub URL sheet.
+- Move or delete a pasted source file, restart the app, and paste its note attachment again. Verify unchanged bytes. Reject folders, files above 25 MB, and batches above 100 MB without partial notes.
+- Run bash scripts/verify-note-import.sh to check the live example, Notes routing, and file persistence.

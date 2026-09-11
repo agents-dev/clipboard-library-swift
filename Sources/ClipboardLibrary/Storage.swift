@@ -28,6 +28,7 @@ struct OutlineNote: Identifiable, FetchableRecord, TableRecord, Decodable, Equat
     var position: Int
     var text: String
     var expanded: Bool
+    var attachmentName: String? = nil
 }
 enum LocalKeyFile {
     static func loadOrCreate(at url: URL) throws -> SymmetricKey {
@@ -71,6 +72,9 @@ final class ClipboardRepository: @unchecked Sendable {
         }
         migrator.registerMigration("v5-database-payloads") { db in
             try db.execute(sql: "CREATE TABLE payloads(itemID TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE, sealed BLOB NOT NULL)")
+        }
+        migrator.registerMigration("v6-note-files") { db in
+            try db.execute(sql: "ALTER TABLE notes ADD COLUMN attachmentName TEXT; CREATE TABLE noteFiles(noteID TEXT PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE, sealed BLOB NOT NULL)")
         }
         try migrator.migrate(db)
     }

@@ -10,6 +10,10 @@
 - Run OCR and inference on the serial indexing queue.
 - Preserve originals and store annotation documents as independent versions.
 - Store outline notes as ordered parent-child rows in SQLite.
+- Store attachment names on notes and AES-GCM file bytes in noteFiles. Cascade attachment deletion with its note. Commit each imported group or file batch in one transaction.
+- Fetch public GitHub skill trees through the GitHub API only after an import request. Preserve each SKILL.md payload and export it as its skill-directory name with a .md extension. Keep inference local and never execute imported content.
+- Read Finder file URLs for Notes paste. Keep plain-text paste in the native editor. Scope the AppKit paste event monitor to the Notes region and its field editor.
+- Export attached files to fresh owner-readable ClipboardLibrary/Exports subdirectories before paste. Keep these unencrypted copies available for receiving apps; retain encrypted originals in SQLite.
 - Delete a note and all descendants with one recursive SQLite query.
 - Promote direct children in place when Backspace deletes an empty note.
 - Run as a regular Dock and menu-bar application and hide the picker when the application loses focus.
