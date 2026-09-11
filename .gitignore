@@ -3,6 +3,7 @@
 .swiftpm/
 work/
 outputs/*.app/
+outputs/*.png
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 DerivedData/

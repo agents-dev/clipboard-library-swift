@@ -217,6 +217,10 @@ struct LibraryView: View {
         model?.quitApplication = { [weak self] in self?.quit() }
         let codes: [String: UInt32] = ["V":9, "B":11, "C":8, "X":7]
         registerShortcut(codes[model?.shortcutKey ?? "V"] ?? 9)
+        if ProcessInfo.processInfo.arguments.contains("--open-picker") {
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in self?.show() }
+        }
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         show()
@@ -246,6 +250,7 @@ struct LibraryView: View {
         if status != noErr { model?.message = "Shortcut is unavailable. Choose another shortcut." }
     }
     func windowDidResignKey(_ notification: Notification) {
+        if ProcessInfo.processInfo.arguments.contains("--open-picker") { return }
         guard let picker = notification.object as? NSPanel, picker === panel else { return }
         DispatchQueue.main.async { [weak picker] in
             guard let picker else { return }
