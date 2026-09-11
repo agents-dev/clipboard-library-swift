@@ -20,3 +20,6 @@
 - Double-click a note and verify full-text paste into the previous application and picker dismissal. Repeat during editing.
 - Paste multiple lines into a note. Select another note and verify only the first line remains visible. Select the original note and verify all lines remain intact.
 - Focus a different note without typing. Verify the blue dot moves immediately and the editor contains all lines. Repeat with keyboard focus.
+- Drag text clips from both list and grid into the empty Notes panel. Verify full text and line breaks.
+- Drop a clip on a child node. Verify the insertion line and a new sibling directly below that child. Preserve the parent, following siblings, and original clipboard payload.
+- Drop a clip on blank Notes space. Verify a new root note. Restart and verify persistence.

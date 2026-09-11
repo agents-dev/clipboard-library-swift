@@ -152,7 +152,7 @@ struct LibraryView: View {
             }.padding(.horizontal).padding(.vertical, 6)
             if model.grid {
                 ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) { ForEach(visible) { item in
-                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; markdownText(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
+                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; markdownText(item.preview).lineLimit(3) }.padding().draggable(ClipboardDrag(id: item.id)).onTapGesture { model.paste(item) }.contextMenu { actions(item) }
                 } }.padding() }
             } else {
                 List(visible, selection: $selection) { item in
@@ -189,6 +189,7 @@ struct LibraryView: View {
                     }
                     .padding(.vertical, 5)
                     .contentShape(Rectangle())
+                    .draggable(ClipboardDrag(id: item.id))
                     .onTapGesture(count: 2) { model.paste(item) }
                     .tag(item.id)
                     .contextMenu { actions(item) }

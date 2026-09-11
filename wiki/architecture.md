@@ -20,3 +20,4 @@
 - Generate `Assets/AppIcon.icns` from the PNG master with `scripts/generate-icon.sh`.
 - Use `scripts/fetch-models.sh` to reproduce model assets from the pinned upstream revision.
 - Retain upstream license files with distributed assets.
+- Transfer clipboard IDs with a private drag type. Read original text only on drop. Insert below the target note at its existing depth; append root notes on blank-panel drops. Use preview labels for clips without text.
