@@ -21,8 +21,6 @@ func replacementNoteID(removing id: String, from rows: [VisibleNote]) -> String?
 struct NotesPanel: View {
     @ObservedObject var model: AppModel
     @State private var selection: String?
-    @State private var dropTarget: String?
-    @State private var rootDropTarget = false
     @FocusState private var focused: String?
 
     var body: some View {
@@ -35,7 +33,7 @@ struct NotesPanel: View {
             }.padding(14)
             Divider()
             if visible.isEmpty {
-                ContentUnavailableView("No notes", systemImage: "list.bullet", description: Text("Drop a clipboard item here, or press +."))
+                ContentUnavailableView("No notes", systemImage: "list.bullet", description: Text("Press + and start typing."))
                     .onTapGesture { addRoot() }
             } else {
                 ScrollView {
@@ -53,11 +51,6 @@ struct NotesPanel: View {
                 Button(role: .destructive) { if let note = selected { remove(note) } } label: { Image(systemName: "trash") }.help("Delete note")
             }.buttonStyle(.borderless).padding(12)
         }.background(Color(nsColor: .controlBackgroundColor))
-        .overlay { RoundedRectangle(cornerRadius: 6).stroke(rootDropTarget ? Color.accentColor : .clear, lineWidth: 2).allowsHitTesting(false) }
-        .dropDestination(for: ClipboardDrag.self) { items, _ in
-            insertClips(items, after: nil)
-        } isTargeted: { rootDropTarget = $0 }
-
     }
 
     var selected: OutlineNote? { model.notes.first { $0.id == selection } }
@@ -103,19 +96,6 @@ struct NotesPanel: View {
         .overlay(alignment: .leading) { if row.depth > 0 { Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 1).padding(.leading, CGFloat(row.depth * 22)) } }
         .contentShape(Rectangle())
         .onTapGesture { selection = row.note.id; focused = row.note.id }
-        .overlay(alignment: .bottom) {
-            if dropTarget == row.note.id {
-                Rectangle().fill(Color.accentColor).frame(height: 2)
-                    .padding(.leading, CGFloat(row.depth * 22) + 8).allowsHitTesting(false)
-            }
-        }
-        .dropDestination(for: ClipboardDrag.self) { items, _ in
-            insertClips(items, after: row.note)
-        } isTargeted: { targeted in
-            if targeted { dropTarget = row.note.id }
-            else if dropTarget == row.note.id { dropTarget = nil }
-        }
-        .help("Drop a clipboard item to insert a note below at this level")
         .contextMenu {
             Button("Add child") { addChild(row.note) }
             Button("Indent") { tryChange { try model.repository.indentNote(row.note) } }
@@ -124,30 +104,6 @@ struct NotesPanel: View {
             Button("Delete", role: .destructive) { remove(row.note) }
         }
     }
-    func insertClips(_ clips: [ClipboardDrag], after note: OutlineNote?) -> Bool {
-        guard !clips.isEmpty else { return false }
-        do {
-            var anchor = note
-            var lastID: String?
-            for clip in clips {
-                let reps = try model.repository.representations(clip.id)
-                guard !reps.isEmpty else { continue }
-                let preview = model.items.first { $0.id == clip.id }?.preview ?? "Clipboard item"
-                let text = clipboardNoteText(reps, fallback: preview)
-                let id = try model.repository.addNote(after: anchor, text: text)
-                anchor = try model.repository.notes().first { $0.id == id }
-                lastID = id
-            }
-            model.refreshNotes()
-            if let lastID { selection = lastID; focused = lastID }
-            return lastID != nil
-        } catch {
-            model.refreshNotes()
-            model.message = error.localizedDescription
-            return false
-        }
-    }
-
     func tryChange(_ change: () throws -> Void) { do { try change(); model.refreshNotes() } catch { model.message = error.localizedDescription } }
     func addRoot() { do { let id = try model.repository.addNote(); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
     func addAfter(_ note: OutlineNote) { do { let id = try model.repository.addNote(after: note); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
