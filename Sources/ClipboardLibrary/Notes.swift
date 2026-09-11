@@ -175,6 +175,7 @@ struct NoteTextField: NSViewRepresentable {
         field.lineBreakMode = selected ? .byWordWrapping : .byTruncatingTail
         field.usesSingleLineMode = !selected
         if let noteField = field as? NoteNativeTextField {
+            noteField.didFocus = { context.coordinator.focusChanged(true) }
             noteField.fullText = text
             noteField.pasteNote = paste
         }
@@ -231,7 +232,16 @@ final class NoteNativeTextField: NSTextField {
     var fullText = ""
     var pasteNote: ((String) -> Void)?
 
-    override func mouseDown(with event: NSEvent) {
+    var didFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        restoreFullText()
+        let accepted = super.becomeFirstResponder()
+        if accepted { didFocus?() }
+        return accepted
+    }
+
+    private func restoreFullText() {
         // Restore all lines before AppKit creates the editor for a collapsed row.
         if currentEditor() == nil {
             stringValue = fullText
@@ -240,6 +250,10 @@ final class NoteNativeTextField: NSTextField {
             lineBreakMode = .byWordWrapping
             invalidateIntrinsicContentSize()
         }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        restoreFullText()
         super.mouseDown(with: event)
     }
     private var clickMonitor: Any?

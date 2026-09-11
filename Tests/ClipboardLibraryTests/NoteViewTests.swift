@@ -3,6 +3,32 @@ import SwiftUI
 @testable import ClipboardLibrary
 
 final class NoteViewTests: XCTestCase {
+    @MainActor func testFocusSelectsNoteBeforeTyping() async throws {
+        _ = NSApplication.shared
+        var selection = "old"
+        let host = NSHostingView(rootView: NoteTextField(
+            initialText: "First line\nSecond line", selected: false,
+            save: { _ in }, deleteIfEmpty: {}, submit: {},
+            focused: Binding(get: { selection == "new" }, set: { if $0 { selection = "new" } })
+        ))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 160),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.orderOut(nil); window.contentView = nil }
+        try await Task.sleep(for: .milliseconds(100))
+        func findField(_ view: NSView) -> NoteNativeTextField? {
+            if let field = view as? NoteNativeTextField { return field }
+            return view.subviews.compactMap { findField($0) }.first
+        }
+        let field = try XCTUnwrap(findField(host))
+        window.makeFirstResponder(nil)
+        selection = "old"
+        XCTAssertTrue(window.makeFirstResponder(field))
+        XCTAssertEqual(selection, "new", "Focus must move selection without a text edit")
+        XCTAssertEqual(field.currentEditor()?.string, "First line\nSecond line")
+    }
+
     @MainActor func testCollapsedNoteRetainsFullTextForSelectionAndDoubleClick() async throws {
         _ = NSApplication.shared
         var pasted: [String] = []

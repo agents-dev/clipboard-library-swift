@@ -19,3 +19,4 @@
 
 - Double-click a note and verify full-text paste into the previous application and picker dismissal. Repeat during editing.
 - Paste multiple lines into a note. Select another note and verify only the first line remains visible. Select the original note and verify all lines remain intact.
+- Focus a different note without typing. Verify the blue dot moves immediately and the editor contains all lines. Repeat with keyboard focus.
