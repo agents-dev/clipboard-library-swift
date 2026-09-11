@@ -5,6 +5,34 @@ import GRDB
 @testable import ClipboardLibrary
 
 final class StorageTests: XCTestCase {
+    func testReplacementNoteFocusPrefersPreviousThenNext() {
+        let first = OutlineNote(id: "first", parentID: nil, position: 0, text: "", expanded: true)
+        let second = OutlineNote(id: "second", parentID: nil, position: 1, text: "", expanded: true)
+        let third = OutlineNote(id: "third", parentID: nil, position: 2, text: "", expanded: true)
+        let rows = [first, second, third].map { VisibleNote(note: $0, depth: 0) }
+
+        XCTAssertEqual(replacementNoteID(removing: "second", from: rows), "first")
+        XCTAssertEqual(replacementNoteID(removing: "first", from: rows), "second")
+        XCTAssertNil(replacementNoteID(removing: "first", from: [rows[0]]))
+    }
+
+    func testDeletingNoteAndPromotingChildrenPreservesOutlineOrder() throws {
+        let repo = try ClipboardRepository(path: ":memory:", key: SymmetricKey(size: .bits256))
+        let beforeID = try repo.addNote(text: "Before")
+        let parentID = try repo.addNote(text: "Parent")
+        let parent = try XCTUnwrap(repo.notes().first { $0.id == parentID })
+        let afterID = try repo.addNote(after: parent, text: "After")
+        let firstChildID = try repo.addNote(parentID: parentID, text: "First child")
+        let secondChildID = try repo.addNote(parentID: parentID, text: "Second child")
+
+        try repo.deleteNotePromotingChildren(parentID)
+
+        let notes = try repo.notes()
+        XCTAssertEqual(notes.map(\.id), [beforeID, firstChildID, secondChildID, afterID])
+        XCTAssertTrue(notes.allSatisfy { $0.parentID == nil })
+        XCTAssertEqual(notes.map(\.position), [0, 1, 2, 3])
+    }
+
     func testOutlineNoteHierarchyAndRecursiveDelete() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

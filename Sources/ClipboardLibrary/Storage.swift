@@ -156,6 +156,22 @@ final class ClipboardRepository: @unchecked Sendable {
         if let expanded { try db.execute(sql: "UPDATE notes SET expanded=? WHERE id=?", arguments: [expanded,id]) }
     } }
     func deleteNote(_ id: String) throws { try db.write { try $0.execute(sql: "WITH RECURSIVE descendants(id) AS (SELECT ? UNION ALL SELECT notes.id FROM notes JOIN descendants ON notes.parentID=descendants.id) DELETE FROM notes WHERE id IN descendants", arguments: [id]) } }
+    func deleteNotePromotingChildren(_ id: String) throws { try db.write { db in
+        guard let note = try OutlineNote.fetchOne(db, key: id) else { return }
+        let children = try OutlineNote.fetchAll(db, sql: "SELECT * FROM notes WHERE parentID=? ORDER BY position,id", arguments: [id])
+        let positionDelta = children.count - 1
+        try db.execute(
+            sql: "UPDATE notes SET position=position+? WHERE parentID IS ? AND position>?",
+            arguments: [positionDelta, note.parentID, note.position]
+        )
+        for (offset, child) in children.enumerated() {
+            try db.execute(
+                sql: "UPDATE notes SET parentID=?,position=? WHERE id=?",
+                arguments: [note.parentID, note.position + offset, child.id]
+            )
+        }
+        try db.execute(sql: "DELETE FROM notes WHERE id=?", arguments: [id])
+    } }
     func indentNote(_ note: OutlineNote) throws { try db.write { db in
         guard let previous = try OutlineNote.fetchOne(db, sql: "SELECT * FROM notes WHERE parentID IS ? AND position<? ORDER BY position DESC LIMIT 1", arguments: [note.parentID,note.position]) else { return }
         let position = (try Int.fetchOne(db, sql: "SELECT COALESCE(MAX(position),-1)+1 FROM notes WHERE parentID=?", arguments: [previous.id])) ?? 0

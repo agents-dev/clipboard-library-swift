@@ -11,6 +11,7 @@
 - Preserve originals and store annotation documents as independent versions.
 - Store outline notes as ordered parent-child rows in SQLite.
 - Delete a note and all descendants with one recursive SQLite query.
+- Promote direct children in place when Backspace deletes an empty note.
 - Run as a regular Dock and menu-bar application and hide the picker when the application loses focus.
 - Generate `Assets/AppIcon.icns` from the PNG master with `scripts/generate-icon.sh`.
 - Use `scripts/fetch-models.sh` to reproduce model assets from the pinned upstream revision.

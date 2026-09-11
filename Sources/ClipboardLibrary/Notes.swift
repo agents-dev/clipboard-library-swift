@@ -6,6 +6,13 @@ struct VisibleNote: Identifiable {
     var id: String { note.id }
 }
 
+func replacementNoteID(removing id: String, from rows: [VisibleNote]) -> String? {
+    guard let index = rows.firstIndex(where: { $0.id == id }) else { return nil }
+    if index > 0 { return rows[index - 1].id }
+    if index + 1 < rows.count { return rows[index + 1].id }
+    return nil
+}
+
 struct NotesPanel: View {
     @ObservedObject var model: AppModel
     @State private var selection: String?
@@ -61,11 +68,14 @@ struct NotesPanel: View {
                 }.buttonStyle(.plain).frame(width: 14)
             } else { Color.clear.frame(width: 14, height: 1) }
             Circle().fill(selection == row.note.id ? Color.accentColor : Color.secondary).frame(width: 7, height: 7)
-            NoteTextField(initialText: row.note.text, save: { model.saveNoteText(row.note.id, text: $0) })
+            NoteTextField(
+                initialText: row.note.text,
+                save: { model.saveNoteText(row.note.id, text: $0) },
+                deleteIfEmpty: { removePromotingChildren(row.note) }
+            )
                 .focused($focused, equals: row.note.id).onSubmit { addAfter(row.note) }
         }
         .padding(.leading, CGFloat(row.depth * 22) + 8).padding(.trailing, 8).padding(.vertical, 5)
-        .background(selection == row.note.id ? Color.accentColor.opacity(0.12) : Color.clear)
         .overlay(alignment: .leading) { if row.depth > 0 { Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 1).padding(.leading, CGFloat(row.depth * 22)) } }
         .contentShape(Rectangle()).onTapGesture { selection = row.note.id; focused = row.note.id }
         .contextMenu {
@@ -81,20 +91,37 @@ struct NotesPanel: View {
     func addAfter(_ note: OutlineNote) { do { let id = try model.repository.addNote(after: note); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
     func addChild(_ note: OutlineNote) { do { try model.repository.updateNote(note.id, expanded: true); let id = try model.repository.addNote(parentID: note.id); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
     func remove(_ note: OutlineNote) { do { try model.repository.deleteNote(note.id); model.refreshNotes(); selection = nil } catch { model.message = error.localizedDescription } }
+    func removePromotingChildren(_ note: OutlineNote) {
+        let rows = visible
+        let nextID = replacementNoteID(removing: note.id, from: rows)
+        do {
+            try model.repository.deleteNotePromotingChildren(note.id)
+            model.refreshNotes()
+            selection = nextID
+            focused = nextID
+        } catch { model.message = error.localizedDescription }
+    }
 }
 
 private struct NoteTextField: View {
     @State private var text: String
     let save: (String) -> Void
+    let deleteIfEmpty: () -> Void
 
-    init(initialText: String, save: @escaping (String) -> Void) {
+    init(initialText: String, save: @escaping (String) -> Void, deleteIfEmpty: @escaping () -> Void) {
         _text = State(initialValue: initialText)
         self.save = save
+        self.deleteIfEmpty = deleteIfEmpty
     }
 
     var body: some View {
         TextField("Note", text: $text)
             .textFieldStyle(.plain)
             .onChange(of: text) { _, value in save(value) }
+            .onKeyPress(.delete) {
+                guard text.isEmpty else { return .ignored }
+                deleteIfEmpty()
+                return .handled
+            }
     }
 }

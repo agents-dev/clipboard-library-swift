@@ -140,7 +140,7 @@ struct LibraryView: View {
             }.padding(.horizontal).padding(.vertical, 6)
             if model.grid {
                 ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) { ForEach(visible) { item in
-                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; Text(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
+                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; markdownText(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
                 } }.padding() }
             } else {
                 List(visible, selection: $selection) { item in
@@ -169,7 +169,7 @@ struct LibraryView: View {
                         }
                         .accessibilityLabel(previewImage == nil ? "Clipboard text" : "Clipboard image preview")
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(item.preview).lineLimit(3)
+                            markdownText(item.preview).lineLimit(3)
                             Text("\(item.source) · \(item.state) · \(item.useCount) copies").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -212,6 +212,9 @@ struct LibraryView: View {
         }.sheet(item: $editing) { item in if let image = model.image(item) { MarkupView(image: image, itemID: item.id, repository: model.repository) } }
     }
     var visible: [ClipboardItem] { model.items.filter { item in switch filter { case "Pinned": return item.pinned; case "Images": return item.preview == "Image"; case "Text": return item.preview != "Image"; default: return true } } }
+    func markdownText(_ source: String) -> Text {
+        Text((try? AttributedString(markdown: source)) ?? AttributedString(source))
+    }
     func move(_ delta: Int) { guard !visible.isEmpty else { return }; let index = selection.flatMap { id in visible.firstIndex { $0.id == id } } ?? (delta > 0 ? -1 : visible.count); selection = visible[max(0,min(visible.count-1,index+delta))].id }
     @ViewBuilder func actions(_ item: ClipboardItem) -> some View {
         Button("Paste original") { model.paste(item) }
