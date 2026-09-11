@@ -21,6 +21,14 @@ import ApplicationServices
     var quitApplication: (() -> Void)?
     @Published var shortcutKey = UserDefaults.standard.string(forKey: "shortcutKey") ?? "V"
     let indexingQueue = OperationQueue()
+    let noteSaveQueue = DispatchQueue(label: "ClipboardLibrary.note-saves", qos: .userInitiated)
+    func saveNoteText(_ id: String, text: String) {
+        let repository = repository
+        noteSaveQueue.async { [weak self] in
+            do { try repository.updateNote(id, text: text) }
+            catch { let message = error.localizedDescription; Task { @MainActor [weak self] in self?.message = message } }
+        }
+    }
     init() throws {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ClipboardLibrary")
         let key = try LocalKeyFile.loadOrCreate(at: root.appendingPathComponent("history.key"))
@@ -270,6 +278,9 @@ struct LibraryView: View {
         model?.indexingQueue.cancelAllOperations()
         panel?.orderOut(nil)
         NSApplication.shared.terminate(self)
+    }
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.noteSaveQueue.sync {}
     }
     func registerShortcut(_ code: UInt32) {
         if let hotkey { UnregisterEventHotKey(hotkey) }

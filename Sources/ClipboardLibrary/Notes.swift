@@ -61,10 +61,8 @@ struct NotesPanel: View {
                 }.buttonStyle(.plain).frame(width: 14)
             } else { Color.clear.frame(width: 14, height: 1) }
             Circle().fill(selection == row.note.id ? Color.accentColor : Color.secondary).frame(width: 7, height: 7)
-            TextField("Note", text: Binding(get: { model.notes.first(where: { $0.id == row.note.id })?.text ?? "" }, set: { value in
-                if let index = model.notes.firstIndex(where: { $0.id == row.note.id }) { model.notes[index].text = value }
-                do { try model.repository.updateNote(row.note.id, text: value) } catch { model.message = error.localizedDescription }
-            })).textFieldStyle(.plain).focused($focused, equals: row.note.id).onSubmit { addAfter(row.note) }
+            NoteTextField(initialText: row.note.text, save: { model.saveNoteText(row.note.id, text: $0) })
+                .focused($focused, equals: row.note.id).onSubmit { addAfter(row.note) }
         }
         .padding(.leading, CGFloat(row.depth * 22) + 8).padding(.trailing, 8).padding(.vertical, 5)
         .background(selection == row.note.id ? Color.accentColor.opacity(0.12) : Color.clear)
@@ -83,4 +81,20 @@ struct NotesPanel: View {
     func addAfter(_ note: OutlineNote) { do { let id = try model.repository.addNote(after: note); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
     func addChild(_ note: OutlineNote) { do { try model.repository.updateNote(note.id, expanded: true); let id = try model.repository.addNote(parentID: note.id); model.refreshNotes(); selection = id; focused = id } catch { model.message = error.localizedDescription } }
     func remove(_ note: OutlineNote) { do { try model.repository.deleteNote(note.id); model.refreshNotes(); selection = nil } catch { model.message = error.localizedDescription } }
+}
+
+private struct NoteTextField: View {
+    @State private var text: String
+    let save: (String) -> Void
+
+    init(initialText: String, save: @escaping (String) -> Void) {
+        _text = State(initialValue: initialText)
+        self.save = save
+    }
+
+    var body: some View {
+        TextField("Note", text: $text)
+            .textFieldStyle(.plain)
+            .onChange(of: text) { _, value in save(value) }
+    }
 }
