@@ -181,7 +181,11 @@ struct LibraryView: View {
         }.frame(minWidth: 920, minHeight: 440).onAppear { focused = true }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .onKeyPress(.upArrow) { move(-1); return .handled }
-        .onKeyPress(.return) { if let item = visible.first(where: { $0.id == selection }) ?? visible.first { model.paste(item) }; return .handled }
+        .onKeyPress(.return) {
+            if NSApp.keyWindow?.firstResponder is NSTextView { return .ignored }
+            if let item = visible.first(where: { $0.id == selection }) ?? visible.first { model.paste(item) }
+            return .handled
+        }
         .sheet(isPresented: $settings) {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Settings").font(.title2)
