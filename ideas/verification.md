@@ -25,3 +25,5 @@
 - Copy files in Finder and press Command-V in a note or blank Notes space. Repeat after using Search. Verify child attachments, preserved plain-text paste, and no file interception in Search or the GitHub URL sheet.
 - Move or delete a pasted source file, restart the app, and paste its note attachment again. Verify unchanged bytes. Reject folders, files above 25 MB, and batches above 100 MB without partial notes.
 - Run bash scripts/verify-note-import.sh to check the live example, Notes routing, and file persistence.
+- Drag dots to move root and nested subtrees up and down, across parents, and back to the top level. Verify insertion lines below expanded subtrees, child highlighting, collapsed-parent expansion, and unchanged descendants and file attachments.
+- Reject drops on the dragged note and its descendants. Cancel a drag outside Notes and with Escape. Verify that notes stay in place, indicators clear, text edits remain saved, and double-click file paste still works.

@@ -24,6 +24,8 @@ struct NotesPanel: View {
     @State private var showGitHubImport = false
     @State private var importingFiles = false
     @State private var importError = ""
+    @State private var draggingID: String?
+    @State private var dropIndicator: NoteDropDestination?
     @FocusState private var focused: String?
 
     var body: some View {
@@ -47,6 +49,15 @@ struct NotesPanel: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(visible) { row in noteRow(row) }
+                        Text("Drop here to move to top level")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .background(dropIndicator == .rootEnd ? Color.accentColor.opacity(0.15) : Color.clear)
+                            .contentShape(Rectangle())
+                            .onDrop(of: [NoteDrag.type], delegate: NoteDropDelegate(
+                                rowID: nil, notes: model.notes, draggingID: $draggingID,
+                                indicator: $dropIndicator, move: moveSubtree
+                            ))
                     }.padding(.vertical, 8)
                 }
             }
@@ -92,13 +103,28 @@ struct NotesPanel: View {
                     Image(systemName: row.note.expanded ? "chevron.down" : "chevron.right").font(.caption)
                 }.buttonStyle(.plain).frame(width: 14, height: 17)
             } else { Color.clear.frame(width: 14, height: 17) }
+            Circle()
+                .fill(selection == row.note.id ? Color.accentColor : Color.secondary)
+                .frame(width: 7, height: 7)
+                .frame(width: 16, height: 17)
+                .contentShape(Rectangle())
+                .help("Drag to move this note and its children. Drop between rows to reorder, or on a row to make it a child.")
+                .accessibilityLabel("Move \(row.note.text)")
+                .onDrag {
+                    focused = nil
+                    NSApp.keyWindow?.makeFirstResponder(nil)
+                    model.noteSaveQueue.sync {}
+                    selection = row.id
+                    draggingID = row.id
+                    return NoteDrag.provider(row.id)
+                } preview: {
+                    Label(row.note.text.components(separatedBy: .newlines).first ?? "Note", systemImage: "list.bullet.indent")
+                        .lineLimit(1).padding(8)
+                }
             if row.note.attachmentName != nil {
                 Image(systemName: "doc").font(.caption).foregroundStyle(.secondary)
                     .frame(width: 12, height: 17)
-            } else { Circle()
-                .fill(selection == row.note.id ? Color.accentColor : Color.secondary)
-                .frame(width: 7, height: 7)
-                .frame(height: 17) }
+            }
             NoteTextField(
                 initialText: row.note.text,
                 selected: selection == row.note.id,
@@ -123,6 +149,9 @@ struct NotesPanel: View {
         .overlay(alignment: .leading) { if row.depth > 0 { Rectangle().fill(Color.secondary.opacity(0.18)).frame(width: 1).padding(.leading, CGFloat(row.depth * 22)) } }
         .contentShape(Rectangle())
         .onTapGesture { selection = row.note.id; focused = row.note.id }
+        .modifier(NoteRowDropTarget(row: row, notes: model.notes,
+                                    marker: dropIndicator.flatMap { NoteInsertionMarker(destination: $0, rows: visible) }, draggingID: $draggingID,
+                                    indicator: $dropIndicator, move: moveSubtree))
         .contextMenu {
             if row.note.attachmentName != nil {
                 Button("Paste file") { model.pasteNoteFile(row.note.id) }
@@ -134,6 +163,16 @@ struct NotesPanel: View {
             Divider()
             Button("Delete", role: .destructive) { remove(row.note) }
         }
+    }
+    func moveSubtree(_ id: String, to destination: NoteDropDestination) {
+        do {
+            try model.repository.moveNote(id, to: destination)
+            model.refreshNotes()
+            selection = id
+            focused = nil
+        } catch { model.message = error.localizedDescription }
+        draggingID = nil
+        dropIndicator = nil
     }
     func pasteFiles(parentID: String? = nil) {
         let urls = NoteFile.urls(from: .general)

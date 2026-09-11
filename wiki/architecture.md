@@ -10,6 +10,8 @@
 - Run OCR and inference on the serial indexing queue.
 - Preserve originals and store annotation documents as independent versions.
 - Store outline notes as ordered parent-child rows in SQLite.
+- Move note subtrees in one transaction. Validate the destination against the current tree, reject self/descendant moves, change only the branch-root parent, and normalize affected sibling positions. Preserve descendant IDs and attachments.
+- Drag notes by their dots with a process-local note-ID payload. Use row edges for sibling insertion and the row center for child insertion. Draw after-insertion lines below the full visible target subtree.
 - Store attachment names on notes and AES-GCM file bytes in noteFiles. Cascade attachment deletion with its note. Commit each imported group or file batch in one transaction.
 - Fetch public GitHub skill trees through the GitHub API only after an import request. Preserve each SKILL.md payload and export it as its skill-directory name with a .md extension. Keep inference local and never execute imported content.
 - Read Finder file URLs for Notes paste. Keep plain-text paste in the native editor. Scope the AppKit paste event monitor to the Notes region and its field editor.
