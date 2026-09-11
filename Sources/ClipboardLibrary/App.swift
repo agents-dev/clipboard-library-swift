@@ -136,8 +136,30 @@ struct LibraryView: View {
                 } }.padding() }
             } else {
                 List(visible, selection: $selection) { item in
+                    let previewImage = model.image(item)
                     HStack(alignment: .top) {
-                        Image(systemName: item.pinned ? "pin.fill" : "doc.text").foregroundStyle(.secondary)
+                        ZStack(alignment: .topTrailing) {
+                            if let image = previewImage {
+                                Image(nsImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 68, height: 52)
+                                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                                    .overlay { RoundedRectangle(cornerRadius: 7).stroke(.separator) }
+                            } else {
+                                Image(systemName: "doc.text")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 34, height: 42)
+                            }
+                            if item.pinned {
+                                Image(systemName: "pin.fill")
+                                    .font(.caption2)
+                                    .padding(4)
+                                    .background(.regularMaterial, in: Circle())
+                                    .offset(x: 5, y: -5)
+                            }
+                        }
+                        .accessibilityLabel(previewImage == nil ? "Clipboard text" : "Clipboard image preview")
                         VStack(alignment: .leading, spacing: 5) {
                             Text(item.preview).lineLimit(3)
                             Text("\(item.source) · \(item.state) · \(item.useCount) copies").font(.caption).foregroundStyle(.secondary)
