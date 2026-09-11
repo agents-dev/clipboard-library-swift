@@ -19,6 +19,7 @@
 - Delete a note and all descendants with one recursive SQLite query.
 - Promote direct children in place when Backspace deletes an empty note.
 - Run as a regular Dock and menu-bar application and hide the picker when the application loses focus.
+- Route unmodified Up/Down events within the clipboard pane before native controls consume them. Leave Notes editors, modified keys, and sheets in their native responder chains. Request fresh Search focus on every picker presentation.
 - Store versioned shortcut mappings in UserDefaults. Preserve invalid data under `shortcutMappings.invalidBackup` before accepting replacement data.
 - Register distinct enabled mapper triggers through Carbon. Resolve exact application bundle IDs before global mappings. Reserve the clipboard picker trigger.
 - Send balanced keyboard events through the shortcut executor. Wait for physical modifiers to release, serialize execution, and cancel remaining actions when the destination loses focus.

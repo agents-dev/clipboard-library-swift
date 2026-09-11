@@ -11,6 +11,7 @@ import ApplicationServices
     @Published var message = ""
     @Published var grid = false
     @Published var notes: [OutlineNote] = []
+    @Published var pickerPresentation = 0
     @Published var exclusions: String = UserDefaults.standard.string(forKey: "excludedApps") ?? "" { didSet { UserDefaults.standard.set(exclusions, forKey: "excludedApps") } }
     let repository: ClipboardRepository
     var count = NSPasteboard.general.changeCount
@@ -30,10 +31,13 @@ import ApplicationServices
             catch { let message = error.localizedDescription; Task { @MainActor [weak self] in self?.message = message } }
         }
     }
-    init() throws {
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ClipboardLibrary")
-        let key = try LocalKeyFile.loadOrCreate(at: root.appendingPathComponent("history.key"))
-        repository = try ClipboardRepository(path: root.appendingPathComponent("history.sqlite").path, key: key)
+    init(repository: ClipboardRepository? = nil) throws {
+        if let repository { self.repository = repository }
+        else {
+            let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("ClipboardLibrary")
+            let key = try LocalKeyFile.loadOrCreate(at: root.appendingPathComponent("history.key"))
+            self.repository = try ClipboardRepository(path: root.appendingPathComponent("history.sqlite").path, key: key)
+        }
         indexingQueue.maxConcurrentOperationCount = 1; indexingQueue.qualityOfService = .utility
         refresh()
         refreshNotes()
@@ -208,10 +212,13 @@ struct LibraryView: View {
             Divider()
             HStack { Text(model.paused ? "Capture paused" : "Local history • ⌘⇧V"); Spacer(); Text(model.message.isEmpty ? "Return to paste" : model.message).lineLimit(2) }.font(.caption).foregroundStyle(.secondary).padding(12)
         }.frame(minWidth: 600, minHeight: 440)
+            .background(ClipboardKeyNavigation(move: move))
         NotesPanel(model: model).frame(minWidth: 280, idealWidth: 340, maxWidth: 520)
         }.frame(minWidth: 920, minHeight: 440).onAppear { focused = true }
-        .onKeyPress(.downArrow) { move(1); return .handled }
-        .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onChange(of: model.pickerPresentation) { _, _ in
+            focused = false
+            DispatchQueue.main.async { focused = true }
+        }
         .onKeyPress(.return) {
             if NSApp.keyWindow?.firstResponder is NSTextView { return .ignored }
             if let item = visible.first(where: { $0.id == selection }) ?? visible.first { model.paste(item) }
@@ -369,5 +376,6 @@ struct LibraryView: View {
         panel?.center()
         panel?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        model.pickerPresentation += 1
     }
 }

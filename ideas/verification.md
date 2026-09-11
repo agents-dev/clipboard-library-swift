@@ -27,3 +27,5 @@
 - Run bash scripts/verify-note-import.sh to check the live example, Notes routing, and file persistence.
 - Drag dots to move root and nested subtrees up and down, across parents, and back to the top level. Verify insertion lines below expanded subtrees, child highlighting, collapsed-parent expansion, and unchanged descendants and file attachments.
 - Reject drops on the dragged note and its descendants. Cancel a drag outside Notes and with Escape. Verify that notes stay in place, indicators clear, text edits remain saved, and double-click file paste still works.
+- Press Up and Down with Search focused and with the clip list focused. Verify one clip per key press, repeated-key navigation, and end boundaries. Edit or drag a note, close and reopen the picker, and verify Search focus and clip navigation return. Keep Notes cursor keys, modified arrows, and sheet controls unaffected.
+- Run swift test --filter ClipboardNavigationTests to verify real picker selection with stored clips. Seed the test repository before mounting Search; avoid replacing model.items with transient fixtures that a search refresh can discard.
