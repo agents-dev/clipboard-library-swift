@@ -132,7 +132,7 @@ struct LibraryView: View {
             }.padding(.horizontal).padding(.vertical, 6)
             if model.grid {
                 ScrollView { LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) { ForEach(visible) { item in
-                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; Text(item.preview).lineLimit(3) }.padding().onTapGesture(count: 2) { model.paste(item) }.contextMenu { actions(item) }
+                    VStack { if let image = model.image(item) { Image(nsImage: image).resizable().scaledToFit().frame(height: 110) }; Text(item.preview).lineLimit(3) }.padding().onTapGesture { model.paste(item) }.contextMenu { actions(item) }
                 } }.padding() }
             } else {
                 List(visible, selection: $selection) { item in
@@ -166,7 +166,12 @@ struct LibraryView: View {
                         }
                         Spacer()
                         Button { model.paste(item) } label: { Image(systemName: "arrow.up.doc") }.buttonStyle(.borderless)
-                    }.padding(.vertical, 5).tag(item.id).onTapGesture(count: 2) { model.paste(item) }.contextMenu { actions(item) }
+                    }
+                    .padding(.vertical, 5)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { model.paste(item) }
+                    .tag(item.id)
+                    .contextMenu { actions(item) }
                 }
             }
             Divider()
