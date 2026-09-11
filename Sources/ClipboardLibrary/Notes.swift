@@ -66,13 +66,16 @@ struct NotesPanel: View {
     func hasChildren(_ note: OutlineNote) -> Bool { model.notes.contains { $0.parentID == note.id } }
 
     @ViewBuilder func noteRow(_ row: VisibleNote) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 6) {
             if hasChildren(row.note) {
                 Button { tryChange { try model.repository.updateNote(row.note.id, expanded: !row.note.expanded) } } label: {
                     Image(systemName: row.note.expanded ? "chevron.down" : "chevron.right").font(.caption)
-                }.buttonStyle(.plain).frame(width: 14)
-            } else { Color.clear.frame(width: 14, height: 1) }
-            Circle().fill(selection == row.note.id ? Color.accentColor : Color.secondary).frame(width: 7, height: 7)
+                }.buttonStyle(.plain).frame(width: 14, height: 17)
+            } else { Color.clear.frame(width: 14, height: 17) }
+            Circle()
+                .fill(selection == row.note.id ? Color.accentColor : Color.secondary)
+                .frame(width: 7, height: 7)
+                .frame(height: 17)
             NoteTextField(
                 initialText: row.note.text,
                 selected: selection == row.note.id,
